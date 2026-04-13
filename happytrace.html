@@ -97,7 +97,7 @@
     <div class="topbar">
       <div>
         <div class="brand">HappyTrace</div>
-        <div class="hint">静态 HTML，支持从 <span class="mono">~/.hermes/sessions</span> 读本地会话；Chrome/Arc 可记住目录并自动刷新</div>
+        <div class="hint">静态 HTML，支持读取本地 Hermes / Codex session 日志；Chrome/Arc 可记住目录并自动刷新</div>
       </div>
       <div class="grow"></div>
       <div class="toolbar">
@@ -232,8 +232,12 @@
       try { return JSON.parse(text); } catch { return null; }
     }
 
+    function parseJsonl(text) {
+      return String(text || '').split(/\n+/).map(line => line.trim()).filter(Boolean).map(line => safeJsonParse(line)).filter(Boolean);
+    }
+
     function guessDisplayName(session) {
-      return session.display_name || session.id || 'session';
+      return session.display_name || session.title || session.id || 'session';
     }
 
     function extractToolCalls(msg) {
@@ -249,7 +253,25 @@
       });
     }
 
-    function mapMessagesToEvents(rawSession) {
+    function inferTime(session, idx, explicitTimestamp = '') {
+      if (explicitTimestamp) {
+        const d = new Date(explicitTimestamp);
+        if (!Number.isNaN(d.getTime())) return d.toTimeString().slice(0, 8);
+      }
+      const start = session.session_start || session.started_at || session.last_updated || session.updated_at || '';
+      if (!start) return String(idx + 1);
+      const d = new Date(start);
+      if (Number.isNaN(d.getTime())) return String(idx + 1);
+      d.setSeconds(d.getSeconds() + idx);
+      return d.toTimeString().slice(0, 8);
+    }
+
+    function summarizeCodexContentBlocks(content) {
+      if (!Array.isArray(content)) return '';
+      return content.map(item => item?.text || item?.content || '').filter(Boolean).join('\n\n');
+    }
+
+    function mapHermesMessagesToEvents(rawSession) {
       const messages = rawSession.messages || [];
       const events = [];
       const toolCallMap = new Map();
@@ -345,19 +367,228 @@
       return events;
     }
 
-    function inferTime(session, idx) {
-      const start = session.session_start || session.started_at || session.last_updated || '';
-      if (!start) return String(idx + 1);
-      const d = new Date(start);
-      if (Number.isNaN(d.getTime())) return String(idx + 1);
-      d.setSeconds(d.getSeconds() + idx);
-      return d.toTimeString().slice(0, 8);
+    function mapCodexLinesToEvents(lines, rawMeta = {}) {
+      const events = [];
+      const toolCallMap = new Map();
+      let eventId = 1;
+
+      lines.forEach((entry, idx) => {
+        const kind = entry?.type || 'unknown';
+        const payload = entry?.payload || {};
+        const payloadType = payload?.type || '';
+        const time = inferTime(rawMeta, idx, entry.timestamp);
+
+        if (kind === 'session_meta') {
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'session',
+            type: 'SessionStart',
+            tool: '',
+            status: 'completed',
+            summary: truncate(`${payload.originator || 'codex'} @ ${payload.cwd || ''}`),
+            content: '',
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'turn_context') {
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'context',
+            type: 'ContextSnapshot',
+            tool: '',
+            status: 'completed',
+            summary: truncate(`${payload.model || 'model?'} · ${payload.cwd || ''}`),
+            content: '',
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'event_msg' && payloadType === 'user_message') {
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'user',
+            type: 'UserPromptSubmit',
+            tool: '',
+            status: 'completed',
+            summary: truncate(payload.message || ''),
+            content: payload.message || '',
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'event_msg' && payloadType === 'agent_message') {
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'assistant',
+            type: 'AssistantMessage',
+            tool: '',
+            status: 'completed',
+            summary: truncate(payload.message || ''),
+            content: payload.message || '',
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'event_msg' && payloadType === 'agent_reasoning') {
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'assistant',
+            type: 'Reasoning',
+            tool: '',
+            status: 'completed',
+            summary: truncate(payload.text || ''),
+            content: payload.text || '',
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'event_msg' && payloadType === 'turn_aborted') {
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'session',
+            type: 'TurnAborted',
+            tool: '',
+            status: 'error',
+            summary: truncate(payload.reason || 'turn aborted'),
+            content: payload.reason || '',
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'event_msg' && payloadType === 'token_count') {
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'metrics',
+            type: 'TokenCount',
+            tool: '',
+            status: 'completed',
+            summary: truncate(JSON.stringify(payload.info || payload.rate_limits || {})),
+            content: '',
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'response_item' && payloadType === 'function_call') {
+          toolCallMap.set(payload.call_id, payload);
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'assistant',
+            type: 'AssistantToolCall',
+            tool: payload.name || 'tool',
+            status: 'completed',
+            summary: truncate(payload.arguments || ''),
+            content: payload.arguments || '',
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'response_item' && payloadType === 'function_call_output') {
+          const linked = toolCallMap.get(payload.call_id) || {};
+          const parsed = safeJsonParse(payload.output || '');
+          const summary = truncate(parsed?.output || payload.output || '');
+          const exitCode = parsed?.metadata?.exit_code;
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'tool',
+            type: 'ToolResult',
+            tool: linked.name || 'tool',
+            status: exitCode && exitCode !== 0 ? 'error' : 'completed',
+            summary,
+            content: payload.output || '',
+            payload: { entry, linked_tool_call: linked, parsed },
+            output: parsed?.output || payload.output || ''
+          });
+          return;
+        }
+
+        if (kind === 'response_item' && payloadType === 'reasoning') {
+          const summary = truncate(payload.summary?.map?.(x => x.text).filter(Boolean).join('\n\n') || 'reasoning');
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'assistant',
+            type: 'Reasoning',
+            tool: '',
+            status: 'completed',
+            summary,
+            content: summary,
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'response_item' && payloadType === 'ghost_snapshot') {
+          events.push({
+            id: eventId++,
+            time,
+            agent: 'session',
+            type: 'Snapshot',
+            tool: '',
+            status: 'completed',
+            summary: truncate(payload.ghost_commit?.id || 'ghost snapshot'),
+            content: '',
+            payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'response_item' && payloadType === 'message') {
+          const role = payload.role || 'assistant';
+          const content = summarizeCodexContentBlocks(payload.content);
+          const mappedType = role === 'assistant' ? 'AssistantMessage' : `${role.charAt(0).toUpperCase()}${role.slice(1)}Message`;
+          const mappedAgent = role === 'assistant' ? 'assistant' : role;
+          events.push({
+            id: eventId++,
+            time,
+            agent: mappedAgent,
+            type: mappedType,
+            tool: '',
+            status: 'completed',
+            summary: truncate(content || `[${role}]`),
+            content,
+            payload: entry
+          });
+          return;
+        }
+
+        events.push({
+          id: eventId++,
+          time,
+          agent: payloadType || kind,
+          type: 'Unknown',
+          tool: '',
+          status: 'completed',
+          summary: truncate(JSON.stringify(entry)),
+          content: '',
+          payload: entry
+        });
+      });
+
+      return events;
     }
 
-    function normalizeSession(rawSession, sessionIndex, sessionIndexMap = {}) {
-      const sessionId = rawSession.session_id || rawSession.id || `session_${sessionIndex}`;
+    function normalizeHermesSession(rawSession, sessionIndex, sessionIndexMap = {}) {
+      const sessionId = rawSession.session_id || rawSession.id || `hermes_session_${sessionIndex}`;
       const sessionMeta = Object.values(sessionIndexMap).find(x => x.session_id === sessionId) || {};
-      const events = mapMessagesToEvents(rawSession);
+      const events = mapHermesMessagesToEvents(rawSession);
       const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
       return {
         id: sessionId,
@@ -369,48 +600,105 @@
         last_event_at: rawSession.last_updated || sessionMeta.updated_at || '',
         agents: roles,
         events,
-        raw: rawSession,
+        raw: { ...rawSession, message_count: rawSession.message_count || rawSession.messages?.length || 0 },
         index_meta: sessionMeta
       };
     }
 
-    async function loadFromDirectoryHandle(handle) {
+    function normalizeCodexSession(lines, sessionIndex, codexIndexMap = {}, pathInfo = '') {
+      const metaLine = lines.find(x => x?.type === 'session_meta') || {};
+      const meta = metaLine.payload || {};
+      const sessionId = meta.id || `codex_session_${sessionIndex}`;
+      const indexMeta = codexIndexMap[sessionId] || {};
+      const turnContext = lines.find(x => x?.type === 'turn_context')?.payload || {};
+      const firstUser = lines.find(x => x?.type === 'event_msg' && x?.payload?.type === 'user_message')?.payload?.message || '';
+      const events = mapCodexLinesToEvents(lines, { session_start: meta.timestamp || lines[0]?.timestamp || '', last_updated: lines.at(-1)?.timestamp || '', updated_at: indexMeta.updated_at || '' });
+      const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
+      return {
+        id: sessionId,
+        title: indexMeta.thread_name || truncate(firstUser, 80) || PathSafeBasename(pathInfo) || sessionId,
+        project: meta.originator || meta.source || 'codex',
+        project_path: meta.cwd || turnContext.cwd || '',
+        runtime: 'Codex',
+        started_at: meta.timestamp || lines[0]?.timestamp || '',
+        last_event_at: lines.at(-1)?.timestamp || indexMeta.updated_at || '',
+        agents: roles,
+        events,
+        raw: { ...meta, model: turnContext.model || '', message_count: lines.length, lines },
+        index_meta: indexMeta
+      };
+    }
+
+    function PathSafeBasename(pathText) {
+      const parts = String(pathText || '').split('/').filter(Boolean);
+      return parts[parts.length - 1] || '';
+    }
+
+    function sortSessions(sessions) {
+      return sessions.sort((a, b) => String(b.started_at || b.last_event_at || '').localeCompare(String(a.started_at || a.last_event_at || '')));
+    }
+
+    async function collectFilesFromDirectoryHandle(handle, prefix = '') {
       const files = [];
       for await (const [name, entry] of handle.entries()) {
-        if (entry.kind === 'file' && name.endsWith('.json')) {
-          files.push(entry);
+        const nextPath = prefix ? `${prefix}/${name}` : name;
+        if (entry.kind === 'file') files.push({ name, path: nextPath, handle: entry });
+        if (entry.kind === 'directory') files.push(...await collectFilesFromDirectoryHandle(entry, nextPath));
+      }
+      return files;
+    }
+
+    async function loadTextFromCollectedFile(fileRecord) {
+      if (fileRecord.handle) return await (await fileRecord.handle.getFile()).text();
+      if (fileRecord.file) return await fileRecord.file.text();
+      return '';
+    }
+
+    async function loadUnifiedSessions(files) {
+      const sessions = [];
+      let hermesIndex = {};
+      const codexIndex = {};
+
+      for (const file of files) {
+        if (file.name === 'sessions.json' && /(^|\/)\.hermes\//.test('/' + file.path) || file.name === 'sessions.json') {
+          const parsed = safeJsonParse(await loadTextFromCollectedFile(file));
+          if (parsed && typeof parsed === 'object') hermesIndex = parsed;
+        }
+        if (file.name === 'session_index.jsonl') {
+          const lines = parseJsonl(await loadTextFromCollectedFile(file));
+          for (const line of lines) codexIndex[line.id] = line;
         }
       }
-      const sessionsIndexFile = files.find(f => f.name === 'sessions.json');
-      let sessionIndexMap = {};
-      if (sessionsIndexFile) {
-        const text = await (await sessionsIndexFile.getFile()).text();
-        sessionIndexMap = safeJsonParse(text) || {};
+
+      let hermesCount = 0;
+      let codexCount = 0;
+      for (const file of files) {
+        if (/^session_.*\.json$/i.test(file.name) && file.name !== 'sessions.json') {
+          const parsed = safeJsonParse(await loadTextFromCollectedFile(file));
+          if (parsed?.messages) sessions.push(normalizeHermesSession(parsed, hermesCount++, hermesIndex));
+          continue;
+        }
+        if (file.name.endsWith('.jsonl') && file.name !== 'session_index.jsonl' && /rollout-|sessions\//.test(file.path)) {
+          const lines = parseJsonl(await loadTextFromCollectedFile(file));
+          if (lines[0]?.type === 'session_meta') sessions.push(normalizeCodexSession(lines, codexCount++, codexIndex, file.path));
+        }
       }
-      const sessionFiles = files.filter(f => /^session_.*\.json$/i.test(f.name) && f.name !== 'sessions.json');
-      const rawSessions = [];
-      for (const fileHandle of sessionFiles) {
-        const text = await (await fileHandle.getFile()).text();
-        const parsed = safeJsonParse(text);
-        if (parsed?.messages) rawSessions.push(parsed);
-      }
-      rawSessions.sort((a, b) => String(b.session_start || '').localeCompare(String(a.session_start || '')));
-      return { sessions: rawSessions.map((s, i) => normalizeSession(s, i, sessionIndexMap)) };
+
+      return { sessions: sortSessions(sessions) };
+    }
+
+    async function loadFromDirectoryHandle(handle) {
+      const files = await collectFilesFromDirectoryHandle(handle);
+      return await loadUnifiedSessions(files);
     }
 
     async function loadFromFileList(fileList) {
-      const files = Array.from(fileList || []);
-      let sessionIndexMap = {};
-      const indexFile = files.find(f => f.name === 'sessions.json');
-      if (indexFile) sessionIndexMap = safeJsonParse(await indexFile.text()) || {};
-      const sessionFiles = files.filter(f => /^session_.*\.json$/i.test(f.name) && f.name !== 'sessions.json');
-      const rawSessions = [];
-      for (const file of sessionFiles) {
-        const parsed = safeJsonParse(await file.text());
-        if (parsed?.messages) rawSessions.push(parsed);
-      }
-      rawSessions.sort((a, b) => String(b.session_start || '').localeCompare(String(a.session_start || '')));
-      return { sessions: rawSessions.map((s, i) => normalizeSession(s, i, sessionIndexMap)) };
+      const files = Array.from(fileList || []).map(file => ({
+        name: file.name,
+        path: file.webkitRelativePath || file.name,
+        file
+      }));
+      return await loadUnifiedSessions(files);
     }
 
     async function connectDirectory() {
@@ -472,7 +760,7 @@
       const sessions = state.data.sessions || [];
       sessionCount.textContent = sessions.length;
       if (!sessions.length) {
-        sessionsPanel.innerHTML = '<div class="empty">还没有读到 Hermes session。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」。<br><span class="small">目录通常是 ~/.hermes/sessions</span></div>';
+        sessionsPanel.innerHTML = '<div class="empty">还没有读到 session 日志。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」。<br><span class="small">可选目录：~/.hermes、~/.hermes/sessions、~/.codex、~/.codex/sessions</span></div>';
         return;
       }
       sessionsPanel.innerHTML = sessions.map(s => `
@@ -514,7 +802,7 @@
           <div>Events</div><div>${s.events?.length || 0}</div>
           <div>Messages</div><div>${s.raw?.message_count || s.raw?.messages?.length || 0}</div>
           <div>Model</div><div>${escapeHtml(s.raw?.model || '-')}</div>
-          <div>Source</div><div>${escapeHtml(s.index_meta?.session_key || '-')}</div>
+          <div>Source</div><div>${escapeHtml(s.index_meta?.session_key || s.index_meta?.thread_name || s.raw?.source || '-')}</div>
         </div>
       `;
     }
