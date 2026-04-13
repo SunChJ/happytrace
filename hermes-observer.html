@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hermes Observer</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #11172a;
+      --panel-2: #0f1526;
+      --muted: #8b97b3;
+      --text: #e8ecf7;
+      --line: #24304b;
+      --accent: #6ea8fe;
+      --green: #3ddc97;
+      --yellow: #ffd166;
+      --red: #ff6b6b;
+      --purple: #c792ea;
+      --cyan: #5edfff;
+      --orange: #ff9f43;
+      --shadow: 0 12px 40px rgba(0,0,0,.3);
+      --radius: 14px;
+      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: linear-gradient(180deg, #0a0f1f 0%, #0d1326 100%);
+      color: var(--text);
+    }
+    .app { height: 100vh; display: grid; grid-template-rows: 72px 1fr 34px; gap: 12px; padding: 12px; }
+    .topbar, .statusbar, .panel { background: rgba(17, 23, 42, .92); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); backdrop-filter: blur(8px); }
+    .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; overflow: hidden; }
+    .brand { font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
+    .hint { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .grow { flex: 1; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    input, select, button {
+      background: #0d1427; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit;
+    }
+    input[type="file"] { padding: 6px; max-width: 240px; }
+    button { cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    .layout { min-height: 0; display: grid; grid-template-columns: 340px 1fr; gap: 12px; }
+    .sidebar { min-height: 0; display: grid; grid-template-rows: minmax(240px, 1fr) minmax(150px, auto) minmax(100px, auto); gap: 12px; }
+    .main { min-height: 0; display: grid; grid-template-rows: 1fr minmax(270px, 40%); gap: 12px; }
+    .panel { min-height: 0; display: flex; flex-direction: column; }
+    .panel h3 { margin: 0; padding: 12px 14px; font-size: 13px; color: #b6c3df; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+    .panel-body { min-height: 0; overflow: auto; padding: 10px; }
+    .session-item, .event-row, .agent-chip { border: 1px solid transparent; border-radius: 10px; transition: .15s ease; }
+    .session-item { padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,.02); cursor: pointer; }
+    .session-item:hover, .event-row:hover { border-color: #35518c; background: rgba(110,168,254,.06); }
+    .session-item.active, .event-row.active { border-color: var(--accent); background: rgba(110,168,254,.12); }
+    .session-title { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 13px; }
+    .meta, .meta-grid { color: var(--muted); font-size: 12px; }
+    .meta { margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .meta-grid { display: grid; grid-template-columns: 92px 1fr; gap: 8px 10px; }
+    .meta-grid div:nth-child(odd) { color: #9fb0d7; }
+    .agents { display: flex; gap: 8px; flex-wrap: wrap; }
+    .agent-chip { padding: 6px 10px; background: rgba(255,255,255,.03); border-color: var(--line); cursor: pointer; font-size: 12px; }
+    .agent-chip.active { border-color: var(--accent); color: #fff; }
+    .event-list { display: flex; flex-direction: column; gap: 8px; }
+    .event-row { display: grid; grid-template-columns: 54px 72px 100px 126px 94px 1fr; gap: 10px; align-items: start; padding: 10px; background: rgba(255,255,255,.02); cursor: pointer; font-size: 12px; }
+    .mono { font-family: var(--mono); }
+    .summary { color: #dbe5ff; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 8px; border: 1px solid transparent; width: fit-content; font-size: 11px; white-space: nowrap; }
+    .t-UserPromptSubmit { color: var(--purple); border-color: rgba(199,146,234,.35); background: rgba(199,146,234,.12); }
+    .t-AssistantMessage { color: #a5b4fc; border-color: rgba(165,180,252,.35); background: rgba(165,180,252,.1); }
+    .t-AssistantToolCall { color: var(--yellow); border-color: rgba(255,209,102,.35); background: rgba(255,209,102,.12); }
+    .t-ToolResult { color: var(--green); border-color: rgba(61,220,151,.35); background: rgba(61,220,151,.12); }
+    .t-Stop { color: var(--orange); border-color: rgba(255,159,67,.35); background: rgba(255,159,67,.12); }
+    .t-Unknown { color: var(--cyan); border-color: rgba(94,223,255,.35); background: rgba(94,223,255,.12); }
+    .s-completed { color: var(--green); }
+    .s-error { color: var(--red); }
+    pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 12px; line-height: 1.55; background: #0b1222; border: 1px solid var(--line); border-radius: 12px; padding: 12px; max-height: 300px; overflow: auto; }
+    .detail-grid { display: grid; grid-template-columns: 96px 1fr; gap: 8px 10px; margin-bottom: 12px; font-size: 13px; }
+    .detail-grid div:nth-child(odd) { color: #9fb0d7; }
+    .section { margin-bottom: 12px; }
+    .section-title { color: #b6c3df; font-size: 12px; margin-bottom: 6px; }
+    .statusbar { display: flex; align-items: center; gap: 14px; padding: 0 12px; color: var(--muted); font-size: 12px; overflow: auto; white-space: nowrap; }
+    .empty { color: var(--muted); display: grid; place-items: center; height: 100%; text-align: center; padding: 24px; }
+    .pill { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    .good { color: var(--green); }
+    .warn { color: var(--yellow); }
+    .small { font-size: 11px; color: var(--muted); }
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; }
+      .event-row { grid-template-columns: 48px 68px 90px 110px 88px 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div>
+        <div class="brand">Hermes Observer</div>
+        <div class="hint">静态 HTML，支持从 <span class="mono">~/.hermes/sessions</span> 读本地会话；Chrome/Arc 可记住目录并自动刷新</div>
+      </div>
+      <div class="grow"></div>
+      <div class="toolbar">
+        <input id="searchInput" placeholder="搜索消息 / tool / output" />
+        <select id="typeFilter"><option value="">全部类型</option></select>
+        <select id="agentFilter"><option value="">全部 role</option></select>
+        <button id="connectBtn">连接 sessions 目录</button>
+        <input id="folderInput" type="file" webkitdirectory directory multiple />
+        <button id="reloadBtn">重新加载</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="sidebar">
+        <section class="panel">
+          <h3><span>Sessions</span><span id="sessionCount">0</span></h3>
+          <div id="sessionsPanel" class="panel-body"></div>
+        </section>
+        <section class="panel">
+          <h3><span>Session Meta</span></h3>
+          <div id="metaPanel" class="panel-body"></div>
+        </section>
+        <section class="panel">
+          <h3><span>Roles</span></h3>
+          <div id="agentsPanel" class="panel-body"></div>
+        </section>
+      </div>
+
+      <div class="main">
+        <section class="panel">
+          <h3><span>Events</span><span id="eventCount">0</span></h3>
+          <div id="eventsPanel" class="panel-body"></div>
+        </section>
+        <section class="panel">
+          <h3><span>Detail</span><span id="detailTitle">未选中</span></h3>
+          <div id="detailPanel" class="panel-body"></div>
+        </section>
+      </div>
+    </div>
+
+    <div class="statusbar" id="statusBar"><span>ready</span></div>
+  </div>
+
+  <script>
+    const DB_NAME = 'hermes-observer-db';
+    const STORE = 'kv';
+    const AUTO_REFRESH_MS = 5000;
+    let autoRefreshTimer = null;
+    let directoryHandle = null;
+
+    let state = {
+      data: { sessions: [] },
+      activeSessionId: null,
+      activeEventId: null,
+      activeAgent: '',
+      activeType: '',
+      search: '',
+      sourceMode: 'none',
+      lastLoadedAt: null
+    };
+
+    const $ = (sel) => document.querySelector(sel);
+    const sessionsPanel = $('#sessionsPanel');
+    const metaPanel = $('#metaPanel');
+    const agentsPanel = $('#agentsPanel');
+    const eventsPanel = $('#eventsPanel');
+    const detailPanel = $('#detailPanel');
+    const detailTitle = $('#detailTitle');
+    const sessionCount = $('#sessionCount');
+    const eventCount = $('#eventCount');
+    const typeFilter = $('#typeFilter');
+    const agentFilter = $('#agentFilter');
+    const statusBar = $('#statusBar');
+
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbSet(key, value) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+    async function idbGet(key) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    function currentSession() {
+      return state.data.sessions.find(s => s.id === state.activeSessionId) || state.data.sessions[0] || null;
+    }
+
+    function visibleEvents(session) {
+      if (!session) return [];
+      return session.events.filter(e => {
+        if (state.activeAgent && e.agent !== state.activeAgent) return false;
+        if (state.activeType && e.type !== state.activeType) return false;
+        if (!state.search) return true;
+        const hay = [e.summary, e.tool, e.output, JSON.stringify(e.payload || {}), e.content || ''].join('\n').toLowerCase();
+        return hay.includes(state.search.toLowerCase());
+      });
+    }
+
+    function escapeHtml(v) {
+      return String(v ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function truncate(text, n = 150) {
+      const s = String(text ?? '');
+      return s.length > n ? s.slice(0, n) + '…' : s;
+    }
+
+    function safeJsonParse(text) {
+      try { return JSON.parse(text); } catch { return null; }
+    }
+
+    function guessDisplayName(session) {
+      return session.display_name || session.id || 'session';
+    }
+
+    function extractToolCalls(msg) {
+      const arr = msg.tool_calls || [];
+      return arr.map((tc, idx) => {
+        const fn = tc.function || {};
+        return {
+          localId: `${msg.__idx}-toolcall-${idx}`,
+          tool_call_id: tc.call_id || tc.id || `${msg.__idx}-tc-${idx}`,
+          name: fn.name || 'unknown_tool',
+          arguments: fn.arguments || ''
+        };
+      });
+    }
+
+    function mapMessagesToEvents(rawSession) {
+      const messages = rawSession.messages || [];
+      const events = [];
+      const toolCallMap = new Map();
+      let eventId = 1;
+
+      messages.forEach((msg, idx) => {
+        msg.__idx = idx;
+        const role = msg.role || 'unknown';
+
+        if (role === 'user') {
+          events.push({
+            id: eventId++,
+            time: inferTime(rawSession, idx),
+            agent: 'user',
+            type: 'UserPromptSubmit',
+            tool: '',
+            status: 'completed',
+            summary: truncate(msg.content || '[empty user message]'),
+            content: msg.content || '',
+            payload: msg
+          });
+          return;
+        }
+
+        if (role === 'assistant') {
+          const toolCalls = extractToolCalls(msg);
+          if (toolCalls.length) {
+            toolCalls.forEach((tc) => {
+              toolCallMap.set(tc.tool_call_id, tc);
+              events.push({
+                id: eventId++,
+                time: inferTime(rawSession, idx),
+                agent: 'assistant',
+                type: 'AssistantToolCall',
+                tool: tc.name,
+                status: 'completed',
+                summary: truncate(tc.arguments || `[call] ${tc.name}`),
+                content: msg.content || '',
+                payload: { tool_call: tc, finish_reason: msg.finish_reason, raw_message: msg }
+              });
+            });
+          }
+          if ((msg.content || '').trim()) {
+            const isStop = msg.finish_reason === 'stop';
+            events.push({
+              id: eventId++,
+              time: inferTime(rawSession, idx),
+              agent: 'assistant',
+              type: isStop ? 'Stop' : 'AssistantMessage',
+              tool: '',
+              status: 'completed',
+              summary: truncate(msg.content || ''),
+              content: msg.content || '',
+              payload: msg,
+              output: msg.reasoning || ''
+            });
+          }
+          return;
+        }
+
+        if (role === 'tool') {
+          const linked = toolCallMap.get(msg.tool_call_id || '') || {};
+          const parsed = safeJsonParse(msg.content || '');
+          const summary = parsed?.output ? truncate(parsed.output) : truncate(msg.content || '');
+          events.push({
+            id: eventId++,
+            time: inferTime(rawSession, idx),
+            agent: 'tool',
+            type: 'ToolResult',
+            tool: linked.name || 'tool',
+            status: parsed?.exit_code && parsed.exit_code !== 0 ? 'error' : 'completed',
+            summary,
+            content: msg.content || '',
+            payload: { linked_tool_call: linked, parsed, raw_message: msg },
+            output: parsed?.output || msg.content || ''
+          });
+          return;
+        }
+
+        events.push({
+          id: eventId++,
+          time: inferTime(rawSession, idx),
+          agent: role,
+          type: 'Unknown',
+          tool: '',
+          status: 'completed',
+          summary: truncate(msg.content || `[${role}]`),
+          content: msg.content || '',
+          payload: msg
+        });
+      });
+
+      return events;
+    }
+
+    function inferTime(session, idx) {
+      const start = session.session_start || session.started_at || session.last_updated || '';
+      if (!start) return String(idx + 1);
+      const d = new Date(start);
+      if (Number.isNaN(d.getTime())) return String(idx + 1);
+      d.setSeconds(d.getSeconds() + idx);
+      return d.toTimeString().slice(0, 8);
+    }
+
+    function normalizeSession(rawSession, sessionIndex, sessionIndexMap = {}) {
+      const sessionId = rawSession.session_id || rawSession.id || `session_${sessionIndex}`;
+      const sessionMeta = Object.values(sessionIndexMap).find(x => x.session_id === sessionId) || {};
+      const events = mapMessagesToEvents(rawSession);
+      const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
+      return {
+        id: sessionId,
+        title: rawSession.title || sessionMeta.display_name || sessionMeta.session_key || sessionId,
+        project: rawSession.platform || sessionMeta.platform || 'unknown',
+        project_path: rawSession.cwd || rawSession.project_path || '',
+        runtime: 'Hermes',
+        started_at: rawSession.session_start || rawSession.started_at || '',
+        last_event_at: rawSession.last_updated || sessionMeta.updated_at || '',
+        agents: roles,
+        events,
+        raw: rawSession,
+        index_meta: sessionMeta
+      };
+    }
+
+    async function loadFromDirectoryHandle(handle) {
+      const files = [];
+      for await (const [name, entry] of handle.entries()) {
+        if (entry.kind === 'file' && name.endsWith('.json')) {
+          files.push(entry);
+        }
+      }
+      const sessionsIndexFile = files.find(f => f.name === 'sessions.json');
+      let sessionIndexMap = {};
+      if (sessionsIndexFile) {
+        const text = await (await sessionsIndexFile.getFile()).text();
+        sessionIndexMap = safeJsonParse(text) || {};
+      }
+      const sessionFiles = files.filter(f => /^session_.*\.json$/i.test(f.name) && f.name !== 'sessions.json');
+      const rawSessions = [];
+      for (const fileHandle of sessionFiles) {
+        const text = await (await fileHandle.getFile()).text();
+        const parsed = safeJsonParse(text);
+        if (parsed?.messages) rawSessions.push(parsed);
+      }
+      rawSessions.sort((a, b) => String(b.session_start || '').localeCompare(String(a.session_start || '')));
+      return { sessions: rawSessions.map((s, i) => normalizeSession(s, i, sessionIndexMap)) };
+    }
+
+    async function loadFromFileList(fileList) {
+      const files = Array.from(fileList || []);
+      let sessionIndexMap = {};
+      const indexFile = files.find(f => f.name === 'sessions.json');
+      if (indexFile) sessionIndexMap = safeJsonParse(await indexFile.text()) || {};
+      const sessionFiles = files.filter(f => /^session_.*\.json$/i.test(f.name) && f.name !== 'sessions.json');
+      const rawSessions = [];
+      for (const file of sessionFiles) {
+        const parsed = safeJsonParse(await file.text());
+        if (parsed?.messages) rawSessions.push(parsed);
+      }
+      rawSessions.sort((a, b) => String(b.session_start || '').localeCompare(String(a.session_start || '')));
+      return { sessions: rawSessions.map((s, i) => normalizeSession(s, i, sessionIndexMap)) };
+    }
+
+    async function connectDirectory() {
+      if (!window.showDirectoryPicker) {
+        alert('当前浏览器不支持目录连接。可改用右侧文件夹选择，或用 Chrome/Arc 打开。');
+        return;
+      }
+      const handle = await window.showDirectoryPicker({ mode: 'read' });
+      directoryHandle = handle;
+      await idbSet('sessionsDirHandle', handle);
+      state.sourceMode = 'handle';
+      await reloadData();
+      startAutoRefresh();
+    }
+
+    async function restoreDirectoryHandle() {
+      if (!window.showDirectoryPicker) return false;
+      try {
+        const handle = await idbGet('sessionsDirHandle');
+        if (!handle) return false;
+        const perm = await handle.queryPermission({ mode: 'read' });
+        if (perm === 'granted') {
+          directoryHandle = handle;
+          state.sourceMode = 'handle';
+          await reloadData();
+          startAutoRefresh();
+          return true;
+        }
+      } catch {}
+      return false;
+    }
+
+    async function reloadData() {
+      try {
+        if (state.sourceMode === 'handle' && directoryHandle) {
+          state.data = await loadFromDirectoryHandle(directoryHandle);
+        }
+        state.lastLoadedAt = new Date().toLocaleTimeString();
+        if (!state.activeSessionId || !state.data.sessions.some(s => s.id === state.activeSessionId)) {
+          state.activeSessionId = state.data.sessions[0]?.id || null;
+          state.activeEventId = null;
+        }
+        hydrateFilters();
+        render();
+      } catch (err) {
+        console.error(err);
+        alert('加载失败：' + err.message);
+      }
+    }
+
+    function startAutoRefresh() {
+      clearInterval(autoRefreshTimer);
+      if (state.sourceMode === 'handle' && directoryHandle) {
+        autoRefreshTimer = setInterval(() => reloadData(), AUTO_REFRESH_MS);
+      }
+    }
+
+    function renderSessions() {
+      const sessions = state.data.sessions || [];
+      sessionCount.textContent = sessions.length;
+      if (!sessions.length) {
+        sessionsPanel.innerHTML = '<div class="empty">还没有读到 Hermes session。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」。<br><span class="small">目录通常是 ~/.hermes/sessions</span></div>';
+        return;
+      }
+      sessionsPanel.innerHTML = sessions.map(s => `
+        <div class="session-item ${s.id === state.activeSessionId ? 'active' : ''}" data-session-id="${s.id}">
+          <div class="session-title">
+            <span>${escapeHtml(guessDisplayName(s))}</span>
+            <span class="mono">${s.events?.length || 0}</span>
+          </div>
+          <div class="meta">
+            <span>${escapeHtml(s.project || '-')}</span>
+            <span>${escapeHtml(s.runtime || '-')}</span>
+          </div>
+          <div class="meta mono">${escapeHtml(s.started_at || '')}</div>
+        </div>
+      `).join('');
+      [...sessionsPanel.querySelectorAll('.session-item')].forEach(el => {
+        el.onclick = () => {
+          state.activeSessionId = el.dataset.sessionId;
+          state.activeEventId = null;
+          hydrateFilters();
+          render();
+        };
+      });
+    }
+
+    function renderMeta() {
+      const s = currentSession();
+      if (!s) {
+        metaPanel.innerHTML = '<div class="empty">无 session</div>';
+        return;
+      }
+      metaPanel.innerHTML = `
+        <div class="meta-grid">
+          <div>Runtime</div><div>${escapeHtml(s.runtime || '-')}</div>
+          <div>Platform</div><div>${escapeHtml(s.project || '-')}</div>
+          <div>Session</div><div class="mono">${escapeHtml(s.id || '-')}</div>
+          <div>Started</div><div class="mono">${escapeHtml(s.started_at || '-')}</div>
+          <div>Last Event</div><div class="mono">${escapeHtml(s.last_event_at || '-')}</div>
+          <div>Events</div><div>${s.events?.length || 0}</div>
+          <div>Messages</div><div>${s.raw?.message_count || s.raw?.messages?.length || 0}</div>
+          <div>Model</div><div>${escapeHtml(s.raw?.model || '-')}</div>
+          <div>Source</div><div>${escapeHtml(s.index_meta?.session_key || '-')}</div>
+        </div>
+      `;
+    }
+
+    function renderAgents() {
+      const s = currentSession();
+      if (!s) {
+        agentsPanel.innerHTML = '<div class="empty">无 role</div>';
+        return;
+      }
+      const agents = Array.from(new Set((s.agents || []).concat((s.events || []).map(e => e.agent).filter(Boolean))));
+      agentsPanel.innerHTML = `<div class="agents">${agents.map(a => `<div class="agent-chip ${state.activeAgent === a ? 'active' : ''}" data-agent="${escapeHtml(a)}">${escapeHtml(a)}</div>`).join('')}</div>`;
+      [...agentsPanel.querySelectorAll('.agent-chip')].forEach(el => {
+        el.onclick = () => {
+          state.activeAgent = state.activeAgent === el.dataset.agent ? '' : el.dataset.agent;
+          agentFilter.value = state.activeAgent;
+          state.activeEventId = null;
+          render();
+        };
+      });
+    }
+
+    function renderEvents() {
+      const s = currentSession();
+      const events = visibleEvents(s);
+      eventCount.textContent = events.length;
+      if (!events.length) {
+        eventsPanel.innerHTML = '<div class="empty">当前筛选下没有事件</div>';
+        detailPanel.innerHTML = '<div class="empty">选一条事件看 detail</div>';
+        detailTitle.textContent = '未选中';
+        return;
+      }
+      if (!events.some(e => String(e.id) === String(state.activeEventId))) state.activeEventId = events[0].id;
+      eventsPanel.innerHTML = `<div class="event-list">${events.map(e => `
+        <div class="event-row ${String(e.id) === String(state.activeEventId) ? 'active' : ''}" data-event-id="${e.id}">
+          <div class="mono">#${e.id}</div>
+          <div class="mono">${escapeHtml(e.time || '')}</div>
+          <div>${escapeHtml(e.agent || '-')}</div>
+          <div><span class="badge t-${escapeHtml(e.type || 'Unknown')}">${escapeHtml(e.type || '-')}</span></div>
+          <div class="mono ${e.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(e.tool || e.status || '-')}</div>
+          <div class="summary">${escapeHtml(e.summary || '')}</div>
+        </div>
+      `).join('')}</div>`;
+      [...eventsPanel.querySelectorAll('.event-row')].forEach(el => {
+        el.onclick = () => {
+          state.activeEventId = el.dataset.eventId;
+          renderDetail();
+          renderStatus();
+          [...eventsPanel.querySelectorAll('.event-row')].forEach(x => x.classList.remove('active'));
+          el.classList.add('active');
+        };
+      });
+      renderDetail();
+    }
+
+    function renderDetail() {
+      const s = currentSession();
+      const e = (s?.events || []).find(x => String(x.id) === String(state.activeEventId));
+      if (!e) {
+        detailPanel.innerHTML = '<div class="empty">选一条事件看 detail</div>';
+        detailTitle.textContent = '未选中';
+        return;
+      }
+      detailTitle.textContent = `${e.type || 'Event'} #${e.id}`;
+      detailPanel.innerHTML = `
+        <div class="detail-grid">
+          <div>Agent</div><div>${escapeHtml(e.agent || '-')}</div>
+          <div>Type</div><div>${escapeHtml(e.type || '-')}</div>
+          <div>Tool</div><div class="mono">${escapeHtml(e.tool || '-')}</div>
+          <div>Time</div><div class="mono">${escapeHtml(e.time || '-')}</div>
+          <div>Status</div><div class="${e.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(e.status || '-')}</div>
+          <div>Summary</div><div>${escapeHtml(e.summary || '-')}</div>
+        </div>
+        ${e.content ? `<div class="section"><div class="section-title">Content</div><pre>${escapeHtml(e.content)}</pre></div>` : ''}
+        ${e.output ? `<div class="section"><div class="section-title">Output / Reasoning</div><pre>${escapeHtml(e.output)}</pre></div>` : ''}
+        ${e.payload ? `<div class="section"><div class="section-title">Payload</div><pre>${escapeHtml(JSON.stringify(e.payload, null, 2))}</pre></div>` : ''}
+      `;
+    }
+
+    function hydrateFilters() {
+      const s = currentSession();
+      const types = Array.from(new Set((s?.events || []).map(e => e.type).filter(Boolean)));
+      const agents = Array.from(new Set((s?.events || []).map(e => e.agent).filter(Boolean)));
+      typeFilter.innerHTML = '<option value="">全部类型</option>' + types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+      agentFilter.innerHTML = '<option value="">全部 role</option>' + agents.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+      typeFilter.value = state.activeType;
+      agentFilter.value = state.activeAgent;
+    }
+
+    function renderStatus() {
+      const s = currentSession();
+      const events = visibleEvents(s);
+      const selected = events.find(e => String(e.id) === String(state.activeEventId));
+      statusBar.innerHTML = `
+        <span>source: ${escapeHtml(state.sourceMode)}</span>
+        <span>sessions: ${state.data.sessions.length}</span>
+        <span>session: ${escapeHtml(s?.id || '-')}</span>
+        <span>events: ${events.length}/${s?.events?.length || 0}</span>
+        <span>role: ${escapeHtml(state.activeAgent || 'all')}</span>
+        <span>type: ${escapeHtml(state.activeType || 'all')}</span>
+        <span>search: ${escapeHtml(state.search || 'off')}</span>
+        <span>selected: ${selected ? '#' + selected.id : '-'}</span>
+        <span>last_loaded: ${escapeHtml(state.lastLoadedAt || '-')}</span>
+        <span>${state.sourceMode === 'handle' ? 'auto_refresh: on' : 'auto_refresh: off'}</span>
+      `;
+    }
+
+    function render() {
+      renderSessions();
+      renderMeta();
+      renderAgents();
+      renderEvents();
+      renderStatus();
+    }
+
+    $('#searchInput').addEventListener('input', e => {
+      state.search = e.target.value.trim();
+      state.activeEventId = null;
+      render();
+    });
+    typeFilter.addEventListener('change', e => {
+      state.activeType = e.target.value;
+      state.activeEventId = null;
+      render();
+    });
+    agentFilter.addEventListener('change', e => {
+      state.activeAgent = e.target.value;
+      state.activeEventId = null;
+      render();
+    });
+
+    $('#connectBtn').addEventListener('click', async () => {
+      try { await connectDirectory(); }
+      catch (err) { console.error(err); }
+    });
+
+    $('#folderInput').addEventListener('change', async e => {
+      try {
+        state.data = await loadFromFileList(e.target.files);
+        state.sourceMode = 'filelist';
+        state.lastLoadedAt = new Date().toLocaleTimeString();
+        state.activeSessionId = state.data.sessions[0]?.id || null;
+        state.activeEventId = null;
+        hydrateFilters();
+        render();
+      } catch (err) {
+        console.error(err);
+        alert('目录文件读取失败：' + err.message);
+      }
+    });
+
+    $('#reloadBtn').addEventListener('click', async () => {
+      if (state.sourceMode === 'handle' && directoryHandle) await reloadData();
+    });
+
+    (async function init() {
+      render();
+      await restoreDirectoryHandle();
+    })();
+  </script>
+</body>
+</html>
