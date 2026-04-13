@@ -1,6 +1,6 @@
-# Hermes Observer
+# HappyTrace
 
-A small observability playground for Hermes sessions.
+HappyTrace is a small observability playground for agent session logs.
 
 Current scope:
 
@@ -11,7 +11,7 @@ Current scope:
 
 ## Files
 
-- `hermes-observer.html` — Hermes-specific local-session viewer
+- `happytrace.html` — current local-session log viewer
 - `prototypes/agent-observer.html` — earlier generic observer prototype
 
 ## How to use
@@ -19,14 +19,14 @@ Current scope:
 ### Recommended: serve locally
 
 ```bash
-cd /Users/samsoncj/develop/hermes-observer
+cd /Users/samsoncj/develop/happytrace
 python3 -m http.server 8000
 ```
 
 Then open:
 
 ```text
-http://localhost:8000/hermes-observer.html
+http://localhost:8000/happytrace.html
 ```
 
 Click **连接 sessions 目录** and choose:
