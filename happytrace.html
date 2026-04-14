@@ -84,7 +84,21 @@
     .detail-grid { display: grid; grid-template-columns: 96px 1fr; gap: 8px 10px; margin-bottom: 12px; font-size: 13px; }
     .detail-grid div:nth-child(odd) { color: #9fb0d7; }
     .section { margin-bottom: 12px; }
-    .section-title { color: #b6c3df; font-size: 12px; margin-bottom: 6px; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .section-title { color: #b6c3df; font-size: 12px; }
+    .copy-btn {
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      line-height: 1;
+      color: #c9d7f5;
+      background: rgba(255,255,255,.03);
+    }
+    .copy-btn[data-copied="true"] {
+      color: var(--green);
+      border-color: rgba(61,220,151,.35);
+      background: rgba(61,220,151,.1);
+    }
     .statusbar { display: flex; align-items: center; gap: 14px; padding: 0 12px; color: var(--muted); font-size: 12px; overflow: auto; white-space: nowrap; }
     .empty { color: var(--muted); display: grid; place-items: center; height: 100%; text-align: center; padding: 24px; }
     .pill { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; }
@@ -287,6 +301,23 @@
       try { return JSON.parse(text); } catch { return null; }
     }
 
+    async function copyText(text) {
+      const value = String(text ?? '');
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return;
+      }
+      const input = document.createElement('textarea');
+      input.value = value;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+    }
+
     function sqlRowsToObjects(result) {
       if (!result?.columns || !result?.values) return [];
       return result.values.map(row => Object.fromEntries(result.columns.map((col, idx) => [col, row[idx]])));
@@ -356,6 +387,10 @@
     function formatList(values) {
       const items = Array.from(new Set((values || []).filter(Boolean)));
       return items.length ? items.join(', ') : '-';
+    }
+
+    function collectModels(...valueLists) {
+      return Array.from(new Set(valueLists.flat().filter(Boolean).map(value => String(value))));
     }
 
     function isOpenCodeDeepEvent(event) {
@@ -986,7 +1021,11 @@
       }).map(e => ({ ...e, sort_time: e.payload?.timestamp || e.time }));
       const events = mergeEventsByTime(deepEvents, llmEvents);
       const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
-      const raw = { ...exported, llm_logs: llmEntries, message_count: exported.messages?.length || 0, model: exported.messages?.find?.(m => m.data?.modelID)?.data?.modelID || llmEntries[0]?.modelID || '' };
+      const models = collectModels(
+        ...(exported.messages || []).map(message => message?.data?.modelID),
+        ...llmEntries.map(entry => entry?.modelID)
+      );
+      const raw = { ...exported, llm_logs: llmEntries, message_count: exported.messages?.length || 0, model: models[0] || '', models };
       const index_meta = { slug: sess.slug || '', source_path: llmEntries.length ? 'happytrace-export+llm-logs' : 'happytrace-export' };
       const session = {
         id: sess.id || `opencode_export_${sessionIndex}`,
@@ -1057,7 +1096,8 @@
       const last = entries.at(-1) || {};
       const events = mapOpenCodeLogEntriesToEvents(entries, { session_start: first.timestamp || '', last_updated: last.timestamp || '' });
       const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
-      const raw = { ...sessionMeta, message_count: entries.length, lines: entries, model: first.modelID || '' };
+      const models = collectModels(...entries.map(entry => entry?.modelID));
+      const raw = { ...sessionMeta, message_count: entries.length, lines: entries, model: models[0] || '', models };
       const index_meta = { slug: sessionMeta.slug || '', source_path: 'llm-logs' };
       const session = {
         id: sessionID,
@@ -1101,7 +1141,7 @@
         last_event_at: lines.at(-1)?.timestamp || '',
         agents: roles,
         events,
-        raw: { sessionId, message_count: lines.length, lines, version: first.version || '', model: first.message?.model || '' },
+        raw: { sessionId, message_count: lines.length, lines, version: first.version || '', model: collectModels(...lines.map(line => line?.message?.model))[0] || '', models: collectModels(...lines.map(line => line?.message?.model)) },
         index_meta: { source_path: pathInfo }
       };
     }
@@ -1115,6 +1155,7 @@
       const firstUser = lines.find(x => x?.type === 'event_msg' && x?.payload?.type === 'user_message')?.payload?.message || '';
       const events = mapCodexLinesToEvents(lines, { session_start: meta.timestamp || lines[0]?.timestamp || '', last_updated: lines.at(-1)?.timestamp || '', updated_at: indexMeta.updated_at || '' });
       const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
+      const models = collectModels(turnContext.model, ...lines.map(line => line?.payload?.model), ...lines.map(line => line?.payload?.message?.model));
       return {
         id: sessionId,
         title: indexMeta.thread_name || truncate(firstUser, 80) || PathSafeBasename(pathInfo) || sessionId,
@@ -1125,7 +1166,7 @@
         last_event_at: lines.at(-1)?.timestamp || indexMeta.updated_at || '',
         agents: roles,
         events,
-        raw: { ...meta, model: turnContext.model || '', message_count: lines.length, lines },
+        raw: { ...meta, model: models[0] || '', models, message_count: lines.length, lines },
         index_meta: indexMeta
       };
     }
@@ -1443,6 +1484,7 @@
         return;
       }
       const stats = s.runtime === 'OpenCode' ? s.opencode_stats : null;
+      const sessionModels = s.raw?.models?.length ? s.raw.models : (s.raw?.model ? [s.raw.model] : []);
       metaPanel.innerHTML = `
         <div class="meta-grid">
           <div>Runtime</div><div>${escapeHtml(s.runtime || '-')}</div>
@@ -1452,7 +1494,7 @@
           <div>Last Event</div><div class="mono">${escapeHtml(s.last_event_at || '-')}</div>
           <div>Events</div><div>${s.events?.length || 0}</div>
           <div>Messages</div><div>${s.raw?.message_count || s.raw?.messages?.length || 0}</div>
-          <div>Model</div><div>${escapeHtml(s.raw?.model || '-')}</div>
+          <div>Model</div><div>${escapeHtml(formatList(sessionModels))}</div>
           <div>Source</div><div>${escapeHtml(s.index_meta?.session_key || s.index_meta?.thread_name || s.raw?.source || '-')}</div>
           ${stats ? `
             <div>Source Layers</div><div>${escapeHtml(formatList(stats.sourceKinds))}</div>
@@ -1582,7 +1624,7 @@
         ${isOpenCodeToolEvent ? renderOpenCodeToolExtras(e) : ''}
         ${e.content ? `<div class="section"><div class="section-title">Content / Input</div><pre>${escapeHtml(e.content)}</pre></div>` : ''}
         ${e.output ? `<div class="section"><div class="section-title">Output / Reasoning</div><pre>${escapeHtml(e.output)}</pre></div>` : ''}
-        ${e.payload ? `<div class="section"><div class="section-title">Payload</div><pre>${escapeHtml(JSON.stringify(e.payload, null, 2))}</pre></div>` : ''}
+        ${e.payload ? `<div class="section"><div class="section-head"><div class="section-title">Payload</div><button class="copy-btn" type="button" data-copy-text="${escapeHtml(JSON.stringify(e.payload, null, 2))}">Copy</button></div><pre>${escapeHtml(JSON.stringify(e.payload, null, 2))}</pre></div>` : ''}
       `;
     }
 
@@ -1687,6 +1729,27 @@
 
     $('#reloadBtn').addEventListener('click', async () => {
       if (state.sourceMode === 'handle' && directoryHandle) await reloadData();
+    });
+
+    detailPanel.addEventListener('click', async (event) => {
+      const btn = event.target.closest('[data-copy-text]');
+      if (!btn) return;
+      try {
+        await copyText(btn.dataset.copyText || '');
+        btn.dataset.copied = 'true';
+        btn.textContent = 'Copied';
+        window.setTimeout(() => {
+          btn.dataset.copied = 'false';
+          btn.textContent = 'Copy';
+        }, 1200);
+      } catch (err) {
+        console.error(err);
+        btn.textContent = 'Copy failed';
+        window.setTimeout(() => {
+          btn.dataset.copied = 'false';
+          btn.textContent = 'Copy';
+        }, 1200);
+      }
     });
 
     (async function init() {
