@@ -14,33 +14,45 @@ Current scope:
 - `happytrace.html` — current local-session log viewer（支持一键载入 OpenCode DB）
 - `prototypes/agent-observer.html` — earlier generic observer prototype
 - `scripts/export_opencode_sessions.py` — export OpenCode SQLite sessions into HappyTrace-readable JSON
+- `scripts/serve_happytrace.py` — start a local static server and print the browser URL
 
 ## How to use
 
-### Recommended: serve locally
+### Recommended: start with the local server script
 
 ```bash
-cd /Users/samsoncj/develop/happytrace
-python3 -m http.server 8000
+python3 scripts/serve_happytrace.py
 ```
 
-Then open:
+After startup, the script prints the viewer URL, for example:
 
 ```text
-http://localhost:8000/happytrace.html
+Open: http://127.0.0.1:8000/happytrace.html
 ```
 
-Click **连接 sessions 目录** and choose one of these:
+You can also open the browser automatically:
+
+```bash
+python3 scripts/serve_happytrace.py --open
+```
+
+Or expose it to other devices on your LAN:
+
+```bash
+python3 scripts/serve_happytrace.py --host 0.0.0.0 --port 8000
+```
+
+Then click **连接 sessions 目录** and choose the directory that exists on your machine. Common locations include:
 
 ```text
-/Users/samsoncj/.hermes
-/Users/samsoncj/.hermes/sessions
-/Users/samsoncj/.codex
-/Users/samsoncj/.codex/sessions
-/Users/samsoncj/.claude
-/Users/samsoncj/.claude/transcripts
-/Users/samsoncj/.claude/projects
-/Users/samsoncj/.local/share/opencode
+~/.hermes
+~/.hermes/sessions
+~/.codex
+~/.codex/sessions
+~/.claude
+~/.claude/transcripts
+~/.claude/projects
+~/.local/share/opencode
 ```
 
 After permission is granted, the page can:
@@ -50,6 +62,18 @@ After permission is granted, the page can:
 - auto-refresh every 5 seconds
 
 ### Fallback
+
+If you do not want to use the helper script, you can still serve the repo root directly:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000/happytrace.html
+```
 
 If your browser does not support persistent directory handles well, use the folder picker input and manually select the same directory.
 
