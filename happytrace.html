@@ -794,8 +794,24 @@
               continue;
             }
             if (p.type === 'tool') {
-              const output = typeof p.state?.output === 'string' ? p.state.output : JSON.stringify(p.state?.output || {}, null, 2);
-              events.push({ id: eventId++, time: pTime, agent: 'tool', type: 'ToolResult', tool: p.tool || '', status: p.state?.status === 'error' ? 'error' : 'completed', summary: truncate(`${p.tool || 'tool'} · ${output}`), content: JSON.stringify(p.state?.input || {}, null, 2), payload: { message: msg, part }, output });
+              const state = p.state || {};
+              const inputText = typeof state.input === 'string' ? state.input : JSON.stringify(state.input || {}, null, 2);
+              const output = typeof state.output === 'string' ? state.output : JSON.stringify(state.output || {}, null, 2);
+              const durationMs = state.time?.start && state.time?.end ? (state.time.end - state.time.start) : null;
+              events.push({
+                id: eventId++, time: pTime, agent, type: 'ToolCall', tool: p.tool || '', status: 'completed',
+                summary: truncate(`${p.tool || 'tool'} · ${state.title || state.status || 'call'}`),
+                content: inputText,
+                payload: { message: msg, part, tool_state: state, duration_ms: durationMs },
+                output: ''
+              });
+              events.push({
+                id: eventId++, time: pTime, agent: 'tool', type: 'ToolResult', tool: p.tool || '', status: state.status === 'error' ? 'error' : 'completed',
+                summary: truncate(`${p.tool || 'tool'} · ${state.status || 'completed'}${durationMs != null ? ` · ${durationMs}ms` : ''}`),
+                content: inputText,
+                payload: { message: msg, part, tool_state: state, duration_ms: durationMs },
+                output
+              });
               continue;
             }
             events.push({ id: eventId++, time: pTime, agent, type: 'Unknown', tool: '', status: 'completed', summary: truncate(JSON.stringify(p)), content: '', payload: { message: msg, part } });
@@ -1233,7 +1249,7 @@
           <div>Status</div><div class="${e.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(e.status || '-')}</div>
           <div>Summary</div><div>${escapeHtml(e.summary || '-')}</div>
         </div>
-        ${e.content ? `<div class="section"><div class="section-title">Content</div><pre>${escapeHtml(e.content)}</pre></div>` : ''}
+        ${e.content ? `<div class="section"><div class="section-title">Content / Input</div><pre>${escapeHtml(e.content)}</pre></div>` : ''}
         ${e.output ? `<div class="section"><div class="section-title">Output / Reasoning</div><pre>${escapeHtml(e.output)}</pre></div>` : ''}
         ${e.payload ? `<div class="section"><div class="section-title">Payload</div><pre>${escapeHtml(JSON.stringify(e.payload, null, 2))}</pre></div>` : ''}
       `;
