@@ -137,6 +137,13 @@ For deeper OpenCode inspection, run:
 python3 scripts/export_opencode_sessions.py
 ```
 
+This script can read either OpenCode DB path directly, depending on your setup, for example:
+
+```bash
+python3 scripts/export_opencode_sessions.py --db ~/.local/share/opencode/opencode-local.db
+python3 scripts/export_opencode_sessions.py --db ~/.local/share/opencode/opencode.db
+```
+
 By default it exports into:
 
 ```text
@@ -144,6 +151,23 @@ By default it exports into:
 ```
 
 This produces `opencode-session-*.json` files that HappyTrace can read automatically when you point it at `~/.local/share/opencode`.
+
+If you want the full reconstructed conversation history directly from the DB, you can also target a single session and print markdown to stdout:
+
+```bash
+python3 scripts/export_opencode_sessions.py \
+  --db ~/.local/share/opencode/opencode.db \
+  --session-id ses_xxx \
+  --history-only
+```
+
+Or write markdown history files alongside the JSON export:
+
+```bash
+python3 scripts/export_opencode_sessions.py \
+  --db ~/.local/share/opencode/opencode.db \
+  --history-output-dir ~/.local/share/opencode/happytrace-history
+```
 
 The deep export reconstructs OpenCode sessions from SQLite `session` / `message` / `part` tables and surfaces events such as:
 
