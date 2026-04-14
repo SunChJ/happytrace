@@ -157,6 +157,8 @@ The deep export reconstructs OpenCode sessions from SQLite `session` / `message`
 
 If both exported JSON and llm logs exist for the same OpenCode session, HappyTrace now merges them into one timeline: deep message/tool/step events plus LLM request/first-token/response chain events.
 
+In the merged OpenCode view, Session Meta also shows aggregate stats such as source layers, LLM request count, tool call count, error count, agents, modes, wall time, LLM time, token total, and average TTFT.
+
 ## Notes
 
 - This is intentionally static-first.

@@ -270,6 +270,92 @@
       return d.toTimeString().slice(0, 8);
     }
 
+    function toEpochMs(value) {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value !== 'string' || !value) return null;
+      const ms = Date.parse(value);
+      return Number.isNaN(ms) ? null : ms;
+    }
+
+    function sumNumbers(values) {
+      return values.reduce((acc, value) => acc + (Number.isFinite(value) ? value : 0), 0);
+    }
+
+    function formatDurationCompact(ms) {
+      if (!Number.isFinite(ms) || ms < 0) return '-';
+      if (ms < 1000) return `${Math.round(ms)} ms`;
+      const totalSeconds = Math.round(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+      if (minutes > 0) return `${minutes}m ${seconds}s`;
+      return `${seconds}s`;
+    }
+
+    function formatCount(value) {
+      return Number.isFinite(value) ? String(value) : '-';
+    }
+
+    function formatList(values) {
+      const items = Array.from(new Set((values || []).filter(Boolean)));
+      return items.length ? items.join(', ') : '-';
+    }
+
+    function isOpenCodeDeepEvent(event) {
+      return Boolean(event?.payload?.message || event?.payload?.part || event?.payload?.tool_state);
+    }
+
+    function isOpenCodeLlmEvent(event) {
+      return Boolean(event?.payload?.callID || event?.payload?.timestampMs || event?.type?.startsWith('LLM'));
+    }
+
+    function computeOpenCodeSessionStats(session, llmEntries = []) {
+      const events = session?.events || [];
+      const deepEvents = events.filter(isOpenCodeDeepEvent);
+      const requestEntries = llmEntries.filter(entry => entry?.type === 'request');
+      const responseEntries = llmEntries.filter(entry => entry?.type === 'response');
+      const llmErrorEntries = llmEntries.filter(entry => entry?.type === 'error');
+      const firstTokenEntries = llmEntries.filter(entry => entry?.type === 'first_token');
+      const toolCalls = deepEvents.filter(event => event.type === 'ToolCall');
+      const toolResults = deepEvents.filter(event => event.type === 'ToolResult');
+      const toolErrors = toolResults.filter(event => event.status === 'error');
+      const totalErrorCount = events.filter(event => event.status === 'error' || event.type === 'LLMError').length;
+      const wallMs = (() => {
+        const started = toEpochMs(session?.started_at);
+        const ended = toEpochMs(session?.last_event_at);
+        return started != null && ended != null && ended >= started ? (ended - started) : null;
+      })();
+      const llmDurationMs = sumNumbers(responseEntries.map(entry => Number(entry?.totalDuration)));
+      const totalTokens = sumNumbers(responseEntries.map(entry => Number(entry?.tokens?.total)));
+      const avgTtftMs = firstTokenEntries.length ? (sumNumbers(firstTokenEntries.map(entry => Number(entry?.ttft))) / firstTokenEntries.length) : null;
+      const modeCandidates = requestEntries.map(entry => entry?.mode);
+      if (!modeCandidates.length) {
+        for (const msg of session?.raw?.messages || []) {
+          if (msg?.data?.mode) modeCandidates.push(msg.data.mode);
+        }
+      }
+      const sourceKinds = [];
+      if (deepEvents.length) sourceKinds.push('deep');
+      if (llmEntries.length || events.some(isOpenCodeLlmEvent)) sourceKinds.push('llm');
+      return {
+        sourceKinds,
+        llmRequests: requestEntries.length,
+        llmResponses: responseEntries.length,
+        llmErrors: llmErrorEntries.length,
+        toolCalls: toolCalls.length,
+        toolResults: toolResults.length,
+        toolErrors: toolErrors.length,
+        totalErrors: totalErrorCount,
+        agents: Array.from(new Set([...(session?.agents || []), ...requestEntries.map(entry => entry?.agent).filter(Boolean)])),
+        modes: Array.from(new Set(modeCandidates.filter(Boolean))),
+        wallMs,
+        llmDurationMs,
+        totalTokens,
+        avgTtftMs
+      };
+    }
+
     function summarizeCodexContentBlocks(content) {
       if (!Array.isArray(content)) return '';
       return content.map(item => item?.text || item?.content || '').filter(Boolean).join('\n\n');
@@ -844,7 +930,9 @@
       }).map(e => ({ ...e, sort_time: e.payload?.timestamp || e.time }));
       const events = mergeEventsByTime(deepEvents, llmEvents);
       const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
-      return {
+      const raw = { ...exported, llm_logs: llmEntries, message_count: exported.messages?.length || 0, model: exported.messages?.find?.(m => m.data?.modelID)?.data?.modelID || llmEntries[0]?.modelID || '' };
+      const index_meta = { slug: sess.slug || '', source_path: llmEntries.length ? 'happytrace-export+llm-logs' : 'happytrace-export' };
+      const session = {
         id: sess.id || `opencode_export_${sessionIndex}`,
         title: sess.title || sess.id || `opencode_export_${sessionIndex}`,
         project: sess.project_id || 'opencode',
@@ -854,8 +942,12 @@
         last_event_at: llmEntries.at(-1)?.timestamp || toIsoFromMs(sess.time_updated),
         agents: roles,
         events,
-        raw: { ...exported, llm_logs: llmEntries, message_count: exported.messages?.length || 0, model: exported.messages?.find?.(m => m.data?.modelID)?.data?.modelID || llmEntries[0]?.modelID || '' },
-        index_meta: { slug: sess.slug || '', source_path: llmEntries.length ? 'happytrace-export+llm-logs' : 'happytrace-export' }
+        raw,
+        index_meta
+      };
+      return {
+        ...session,
+        opencode_stats: computeOpenCodeSessionStats(session, llmEntries)
       };
     }
 
@@ -909,7 +1001,9 @@
       const last = entries.at(-1) || {};
       const events = mapOpenCodeLogEntriesToEvents(entries, { session_start: first.timestamp || '', last_updated: last.timestamp || '' });
       const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
-      return {
+      const raw = { ...sessionMeta, message_count: entries.length, lines: entries, model: first.modelID || '' };
+      const index_meta = { slug: sessionMeta.slug || '', source_path: 'llm-logs' };
+      const session = {
         id: sessionID,
         title: sessionMeta.title || sessionID,
         project: sessionMeta.projectID || 'opencode',
@@ -919,8 +1013,12 @@
         last_event_at: last.timestamp || '',
         agents: roles,
         events,
-        raw: { ...sessionMeta, message_count: entries.length, lines: entries, model: first.modelID || '' },
-        index_meta: { slug: sessionMeta.slug || '', source_path: 'llm-logs' }
+        raw,
+        index_meta
+      };
+      return {
+        ...session,
+        opencode_stats: computeOpenCodeSessionStats(session, entries)
       };
     }
 
@@ -1185,6 +1283,7 @@
         metaPanel.innerHTML = '<div class="empty">无 session</div>';
         return;
       }
+      const stats = s.runtime === 'OpenCode' ? s.opencode_stats : null;
       metaPanel.innerHTML = `
         <div class="meta-grid">
           <div>Runtime</div><div>${escapeHtml(s.runtime || '-')}</div>
@@ -1196,6 +1295,18 @@
           <div>Messages</div><div>${s.raw?.message_count || s.raw?.messages?.length || 0}</div>
           <div>Model</div><div>${escapeHtml(s.raw?.model || '-')}</div>
           <div>Source</div><div>${escapeHtml(s.index_meta?.session_key || s.index_meta?.thread_name || s.raw?.source || '-')}</div>
+          ${stats ? `
+            <div>Source Layers</div><div>${escapeHtml(formatList(stats.sourceKinds))}</div>
+            <div>LLM Requests</div><div>${escapeHtml(formatCount(stats.llmRequests))}</div>
+            <div>Tool Calls</div><div>${escapeHtml(formatCount(stats.toolCalls))}</div>
+            <div>Errors</div><div>${escapeHtml(`${formatCount(stats.totalErrors)} (llm ${formatCount(stats.llmErrors)} · tool ${formatCount(stats.toolErrors)})`)}</div>
+            <div>Agents</div><div>${escapeHtml(formatList(stats.agents))}</div>
+            <div>Modes</div><div>${escapeHtml(formatList(stats.modes))}</div>
+            <div>Wall Time</div><div class="mono">${escapeHtml(formatDurationCompact(stats.wallMs))}</div>
+            <div>LLM Time</div><div class="mono">${escapeHtml(formatDurationCompact(stats.llmDurationMs))}</div>
+            <div>Total Tokens</div><div>${escapeHtml(formatCount(stats.totalTokens))}</div>
+            <div>Avg TTFT</div><div class="mono">${stats.avgTtftMs != null ? escapeHtml(formatDurationCompact(stats.avgTtftMs)) : '-'}</div>
+          ` : ''}
         </div>
       `;
     }
@@ -1220,10 +1331,10 @@
 
     function getEventSourceInfo(session, event) {
       if (session?.runtime !== 'OpenCode') return null;
-      if (event?.payload?.message || event?.payload?.part || event?.payload?.tool_state) {
+      if (isOpenCodeDeepEvent(event)) {
         return { label: 'deep', className: 'src-deep' };
       }
-      if (event?.payload?.callID || event?.payload?.timestampMs || event?.type?.startsWith('LLM')) {
+      if (isOpenCodeLlmEvent(event)) {
         return { label: 'llm', className: 'src-llm' };
       }
       if (session?.index_meta?.source_path === 'happytrace-export+llm-logs') {
