@@ -97,7 +97,7 @@
     <div class="topbar">
       <div>
         <div class="brand">HappyTrace</div>
-        <div class="hint">静态 HTML，支持读取本地 Hermes / Codex session 日志；Chrome/Arc 可记住目录并自动刷新</div>
+        <div class="hint">静态 HTML，支持读取本地 Hermes / Codex / Claude session 日志；Chrome/Arc 可记住目录并自动刷新</div>
       </div>
       <div class="grow"></div>
       <div class="toolbar">
@@ -605,6 +605,176 @@
       };
     }
 
+    function normalizeClaudeContent(content) {
+      if (typeof content === 'string') return [{ type: 'text', text: content }];
+      if (Array.isArray(content)) return content.filter(Boolean).map(item => typeof item === 'string' ? { type: 'text', text: item } : item);
+      return [];
+    }
+
+    function mapClaudeEntriesToEvents(lines, rawMeta = {}) {
+      const events = [];
+      const toolUseMap = new Map();
+      let eventId = 1;
+
+      lines.forEach((entry, idx) => {
+        const kind = entry?.type || 'unknown';
+        const time = inferTime(rawMeta, idx, entry.timestamp);
+
+        if (kind === 'file-history-snapshot') {
+          events.push({
+            id: eventId++, time, agent: 'session', type: 'Snapshot', tool: '', status: 'completed',
+            summary: truncate(entry.snapshot?.messageId || 'file-history-snapshot'), content: '', payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'queue-operation') {
+          events.push({
+            id: eventId++, time, agent: 'session', type: entry.operation === 'enqueue' ? 'QueueEnqueue' : 'QueueDequeue', tool: '', status: 'completed',
+            summary: truncate(entry.content || entry.operation || ''), content: entry.content || '', payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'last-prompt') {
+          events.push({
+            id: eventId++, time, agent: 'session', type: 'LastPrompt', tool: '', status: 'completed',
+            summary: truncate(entry.lastPrompt || ''), content: entry.lastPrompt || '', payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'permission-mode') {
+          events.push({
+            id: eventId++, time, agent: 'session', type: 'PermissionMode', tool: '', status: 'completed',
+            summary: truncate(entry.mode || entry.permissionMode || 'permission mode'), content: '', payload: entry
+          });
+          return;
+        }
+
+        if (kind === 'system') {
+          const subtype = entry.subtype || 'system';
+          const mappedType = ({
+            stop_hook_summary: 'StopHookSummary',
+            local_command: 'LocalCommand',
+            turn_duration: 'TurnDuration',
+            api_error: 'ApiError',
+            compact_boundary: 'CompactBoundary'
+          })[subtype] || 'SystemEvent';
+          const summary = truncate(entry.content || entry.error?.error?.message || subtype);
+          events.push({
+            id: eventId++, time, agent: 'system', type: mappedType, tool: '', status: entry.level === 'error' ? 'error' : 'completed',
+            summary, content: entry.content || '', payload: entry,
+            output: entry.error ? JSON.stringify(entry.error, null, 2) : ''
+          });
+          return;
+        }
+
+        if (kind === 'user' || kind === 'assistant') {
+          const blocks = normalizeClaudeContent(entry.message?.content);
+          const role = entry.message?.role || kind;
+          const agent = kind === 'assistant' ? (entry.agentId ? `assistant:${entry.agentId}` : 'assistant') : 'user';
+
+          if (kind === 'assistant' && !blocks.length) {
+            events.push({
+              id: eventId++, time, agent, type: 'AssistantMessage', tool: '', status: 'completed',
+              summary: truncate('[empty assistant message]'), content: '', payload: entry
+            });
+            return;
+          }
+
+          if (kind === 'user' && !blocks.length) {
+            events.push({
+              id: eventId++, time, agent, type: 'UserPromptSubmit', tool: '', status: 'completed',
+              summary: truncate('[empty user message]'), content: '', payload: entry
+            });
+            return;
+          }
+
+          let emittedMainText = false;
+          blocks.forEach((block) => {
+            const blockType = block?.type || 'text';
+            if (blockType === 'tool_use') {
+              toolUseMap.set(block.id, block);
+              events.push({
+                id: eventId++, time, agent, type: 'AssistantToolCall', tool: block.name || 'tool', status: 'completed',
+                summary: truncate(JSON.stringify(block.input || {})), content: JSON.stringify(block.input || {}, null, 2), payload: { entry, block }
+              });
+              return;
+            }
+            if (blockType === 'tool_result') {
+              const linked = toolUseMap.get(block.tool_use_id) || {};
+              const contentText = typeof block.content === 'string' ? block.content : JSON.stringify(block.content || {}, null, 2);
+              events.push({
+                id: eventId++, time, agent: 'tool', type: 'ToolResult', tool: linked.name || 'tool', status: block.is_error ? 'error' : 'completed',
+                summary: truncate(contentText), content: contentText, payload: { entry, block, linked_tool_use: linked }, output: contentText
+              });
+              return;
+            }
+            if (blockType === 'thinking') {
+              events.push({
+                id: eventId++, time, agent, type: 'Reasoning', tool: '', status: 'completed',
+                summary: truncate(block.thinking || ''), content: block.thinking || '', payload: { entry, block }
+              });
+              return;
+            }
+            if (blockType === 'text') {
+              const textContent = block.text || '';
+              const mappedType = kind === 'user' ? 'UserPromptSubmit' : 'AssistantMessage';
+              if (!emittedMainText || textContent.trim()) {
+                events.push({
+                  id: eventId++, time, agent, type: mappedType, tool: '', status: 'completed',
+                  summary: truncate(textContent || `[${role}]`), content: textContent, payload: { entry, block }
+                });
+                emittedMainText = true
+              }
+              return;
+            }
+            events.push({
+              id: eventId++, time, agent, type: 'Unknown', tool: '', status: 'completed',
+              summary: truncate(JSON.stringify(block)), content: '', payload: { entry, block }
+            });
+          });
+          return;
+        }
+
+        events.push({
+          id: eventId++, time, agent: kind, type: 'Unknown', tool: '', status: 'completed',
+          summary: truncate(JSON.stringify(entry)), content: '', payload: entry
+        });
+      });
+
+      return events;
+    }
+
+    function normalizeClaudeSession(lines, sessionIndex, pathInfo = '') {
+      const first = lines[0] || {};
+      const firstWithSession = lines.find(x => x?.sessionId) || {};
+      const sessionId = first.sessionId || firstWithSession.sessionId || `claude_session_${sessionIndex}`;
+      const firstUserEntry = lines.find(x => x?.type === 'user');
+      const firstUserBlocks = normalizeClaudeContent(firstUserEntry?.message?.content);
+      const firstUserText = firstUserBlocks.map(b => b?.text || '').filter(Boolean).join('\n\n');
+      const events = mapClaudeEntriesToEvents(lines, {
+        session_start: first.timestamp || '',
+        last_updated: lines.at(-1)?.timestamp || ''
+      });
+      const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
+      const runtimeSource = pathInfo.includes('/transcripts/') ? 'claude-transcript' : 'claude-project';
+      return {
+        id: sessionId,
+        title: truncate(firstUserText, 80) || PathSafeBasename(pathInfo) || sessionId,
+        project: first.entrypoint || runtimeSource,
+        project_path: first.cwd || '',
+        runtime: 'Claude',
+        started_at: first.timestamp || '',
+        last_event_at: lines.at(-1)?.timestamp || '',
+        agents: roles,
+        events,
+        raw: { sessionId, message_count: lines.length, lines, version: first.version || '', model: first.message?.model || '' },
+        index_meta: { source_path: pathInfo }
+      };
+    }
+
     function normalizeCodexSession(lines, sessionIndex, codexIndexMap = {}, pathInfo = '') {
       const metaLine = lines.find(x => x?.type === 'session_meta') || {};
       const meta = metaLine.payload || {};
@@ -672,6 +842,7 @@
 
       let hermesCount = 0;
       let codexCount = 0;
+      let claudeCount = 0;
       for (const file of files) {
         if (/^session_.*\.json$/i.test(file.name) && file.name !== 'sessions.json') {
           const parsed = safeJsonParse(await loadTextFromCollectedFile(file));
@@ -680,7 +851,18 @@
         }
         if (file.name.endsWith('.jsonl') && file.name !== 'session_index.jsonl' && /rollout-|sessions\//.test(file.path)) {
           const lines = parseJsonl(await loadTextFromCollectedFile(file));
-          if (lines[0]?.type === 'session_meta') sessions.push(normalizeCodexSession(lines, codexCount++, codexIndex, file.path));
+          if (lines[0]?.type === 'session_meta') {
+            sessions.push(normalizeCodexSession(lines, codexCount++, codexIndex, file.path));
+            continue;
+          }
+        }
+        if (file.name.endsWith('.jsonl') && (/\.claude\/transcripts\//.test('/' + file.path) || /\.claude\/projects\//.test('/' + file.path))) {
+          if (file.path.includes('/subagents/')) continue;
+          if (file.name === 'skill-injections.jsonl') continue;
+          const lines = parseJsonl(await loadTextFromCollectedFile(file));
+          if (lines[0]?.type === 'user' || lines[0]?.type === 'assistant' || lines[0]?.type === 'file-history-snapshot') {
+            sessions.push(normalizeClaudeSession(lines, claudeCount++, file.path));
+          }
         }
       }
 
@@ -760,7 +942,7 @@
       const sessions = state.data.sessions || [];
       sessionCount.textContent = sessions.length;
       if (!sessions.length) {
-        sessionsPanel.innerHTML = '<div class="empty">还没有读到 session 日志。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」。<br><span class="small">可选目录：~/.hermes、~/.hermes/sessions、~/.codex、~/.codex/sessions</span></div>';
+        sessionsPanel.innerHTML = '<div class="empty">还没有读到 session 日志。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」。<br><span class="small">可选目录：~/.hermes、~/.codex、~/.claude，或它们各自的 sessions/transcripts/projects 子目录</span></div>';
         return;
       }
       sessionsPanel.innerHTML = sessions.map(s => `

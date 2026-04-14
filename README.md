@@ -5,7 +5,7 @@ HappyTrace is a small observability playground for agent session logs.
 Current scope:
 
 - single-file HTML viewer
-- reads local Hermes and Codex session logs
+- reads local Hermes, Codex, and Claude session logs
 - works as a static page with browser directory access
 - supports session list, event timeline, detail panel, search, and filters
 
@@ -36,6 +36,9 @@ Click **连接 sessions 目录** and choose one of these:
 /Users/samsoncj/.hermes/sessions
 /Users/samsoncj/.codex
 /Users/samsoncj/.codex/sessions
+/Users/samsoncj/.claude
+/Users/samsoncj/.claude/transcripts
+/Users/samsoncj/.claude/projects
 ```
 
 After permission is granted, the page can:
@@ -52,14 +55,12 @@ If your browser does not support persistent directory handles well, use the fold
 
 ### Hermes
 
-HappyTrace currently reads:
+HappyTrace reads:
 
 - `sessions.json`
 - `session_*.json`
 
-from the local Hermes sessions directory.
-
-It maps Hermes messages into observer events such as:
+and maps them into events such as:
 
 - `UserPromptSubmit`
 - `AssistantToolCall`
@@ -69,11 +70,11 @@ It maps Hermes messages into observer events such as:
 
 ### Codex
 
-HappyTrace currently reads Codex rollout logs from `.jsonl` files under the local Codex sessions tree, plus optional metadata from:
+HappyTrace reads Codex rollout logs from `.jsonl` files under the local Codex sessions tree, plus optional metadata from:
 
 - `session_index.jsonl`
 
-It maps Codex entries into observer events such as:
+It maps Codex entries into events such as:
 
 - `SessionStart`
 - `ContextSnapshot`
@@ -86,17 +87,40 @@ It maps Codex entries into observer events such as:
 - `TokenCount`
 - `TurnAborted`
 
+### Claude
+
+HappyTrace reads Claude logs from:
+
+- `transcripts/*.jsonl`
+- `projects/**/*.jsonl`
+
+and currently skips subagent project logs and skill injection logs.
+
+It maps Claude entries into events such as:
+
+- `UserPromptSubmit`
+- `AssistantMessage`
+- `Reasoning`
+- `AssistantToolCall`
+- `ToolResult`
+- `SystemEvent`
+- `LocalCommand`
+- `ApiError`
+- `QueueEnqueue`
+- `QueueDequeue`
+- `Snapshot`
+
 ## Notes
 
 - This is intentionally static-first.
 - Browsers cannot silently read arbitrary local files without permission.
 - So the practical model is: first grant directory access, then let the page auto-refresh.
-- The current goal is cross-runtime session log inspection, not a Hermes-only viewer.
+- The current goal is cross-runtime session log inspection, not a runtime-specific viewer.
 
 ## Next ideas
 
 - better tool-call and tool-result pairing
-- more runtime adapters: Claude, OpenCode, Gemini CLI
+- more runtime adapters: OpenCode, Gemini CLI
 - project / platform grouping
 - richer token / model / source metadata
 - compact mode and foldable long output
