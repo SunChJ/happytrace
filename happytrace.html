@@ -97,7 +97,7 @@
     <div class="topbar">
       <div>
         <div class="brand">HappyTrace</div>
-        <div class="hint">静态 HTML，支持读取本地 Hermes / Codex / Claude session 日志；Chrome/Arc 可记住目录并自动刷新</div>
+        <div class="hint">静态 HTML，支持读取本地 Hermes / Codex / Claude / OpenCode session 日志；Chrome/Arc 可记住目录并自动刷新</div>
       </div>
       <div class="grow"></div>
       <div class="toolbar">
@@ -747,6 +747,71 @@
       return events;
     }
 
+    function mapOpenCodeLogEntriesToEvents(lines, rawMeta = {}) {
+      const events = [];
+      let eventId = 1;
+      for (const entry of lines) {
+        const time = inferTime(rawMeta, eventId - 1, entry.timestamp);
+        const type = entry.type || 'unknown';
+        if (type === 'request') {
+          events.push({
+            id: eventId++, time, agent: entry.agent || 'agent', type: 'LLMRequest', tool: entry.modelID || '', status: 'completed',
+            summary: truncate(`${entry.providerID || ''} / ${entry.modelID || ''} · mode=${entry.mode || ''} · messages=${entry.messageCount || 0} · tools=${entry.toolCount || 0}`),
+            content: '', payload: entry
+          });
+          continue;
+        }
+        if (type === 'first_token') {
+          events.push({
+            id: eventId++, time, agent: entry.agent || 'agent', type: 'FirstToken', tool: '', status: 'completed',
+            summary: truncate(`ttft=${entry.ttft ?? '-'}ms`), content: '', payload: entry
+          });
+          continue;
+        }
+        if (type === 'response') {
+          events.push({
+            id: eventId++, time, agent: entry.agent || 'agent', type: entry.finishReason === 'tool-calls' ? 'LLMResponseToolCalls' : 'LLMResponse', tool: entry.modelID || '', status: 'completed',
+            summary: truncate(`finish=${entry.finishReason || '-'} · total=${entry.tokens?.total ?? '-'} · out=${entry.tokens?.output ?? '-'} · duration=${entry.totalDuration ?? '-'}ms`),
+            content: '', payload: entry,
+            output: JSON.stringify(entry.tokens || {}, null, 2)
+          });
+          continue;
+        }
+        if (type === 'error') {
+          events.push({
+            id: eventId++, time, agent: entry.agent || 'agent', type: 'LLMError', tool: '', status: 'error',
+            summary: truncate(entry.error || 'error'), content: entry.error || '', payload: entry
+          });
+          continue;
+        }
+        events.push({
+          id: eventId++, time, agent: entry.agent || 'agent', type: 'Unknown', tool: '', status: 'completed',
+          summary: truncate(JSON.stringify(entry)), content: '', payload: entry
+        });
+      }
+      return events;
+    }
+
+    function normalizeOpenCodeSession(sessionID, entries, sessionMeta = {}) {
+      const first = entries[0] || {};
+      const last = entries.at(-1) || {};
+      const events = mapOpenCodeLogEntriesToEvents(entries, { session_start: first.timestamp || '', last_updated: last.timestamp || '' });
+      const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
+      return {
+        id: sessionID,
+        title: sessionMeta.title || sessionID,
+        project: sessionMeta.projectID || 'opencode',
+        project_path: sessionMeta.directory || '',
+        runtime: 'OpenCode',
+        started_at: first.timestamp || '',
+        last_event_at: last.timestamp || '',
+        agents: roles,
+        events,
+        raw: { ...sessionMeta, message_count: entries.length, lines: entries, model: first.modelID || '' },
+        index_meta: { slug: sessionMeta.slug || '', source_path: 'llm-logs' }
+      };
+    }
+
     function normalizeClaudeSession(lines, sessionIndex, pathInfo = '') {
       const first = lines[0] || {};
       const firstWithSession = lines.find(x => x?.sessionId) || {};
@@ -828,6 +893,8 @@
       const sessions = [];
       let hermesIndex = {};
       const codexIndex = {};
+      const opencodeSessionMeta = {};
+      const opencodeLogEntries = {};
 
       for (const file of files) {
         if (file.name === 'sessions.json' && /(^|\/)\.hermes\//.test('/' + file.path) || file.name === 'sessions.json') {
@@ -838,11 +905,24 @@
           const lines = parseJsonl(await loadTextFromCollectedFile(file));
           for (const line of lines) codexIndex[line.id] = line;
         }
+        if (file.path.includes('/storage/session/global/') && file.name.endsWith('.json')) {
+          const parsed = safeJsonParse(await loadTextFromCollectedFile(file));
+          if (parsed?.id) opencodeSessionMeta[parsed.id] = parsed;
+        }
+        if (file.path.includes('/llm-logs/') && file.name.endsWith('.jsonl')) {
+          const lines = parseJsonl(await loadTextFromCollectedFile(file));
+          for (const line of lines) {
+            if (!line?.sessionID) continue;
+            if (!opencodeLogEntries[line.sessionID]) opencodeLogEntries[line.sessionID] = [];
+            opencodeLogEntries[line.sessionID].push(line);
+          }
+        }
       }
 
       let hermesCount = 0;
       let codexCount = 0;
       let claudeCount = 0;
+      let opencodeCount = 0;
       for (const file of files) {
         if (/^session_.*\.json$/i.test(file.name) && file.name !== 'sessions.json') {
           const parsed = safeJsonParse(await loadTextFromCollectedFile(file));
@@ -864,6 +944,12 @@
             sessions.push(normalizeClaudeSession(lines, claudeCount++, file.path));
           }
         }
+      }
+
+      for (const [sessionID, entries] of Object.entries(opencodeLogEntries)) {
+        entries.sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0));
+        sessions.push(normalizeOpenCodeSession(sessionID, entries, opencodeSessionMeta[sessionID] || {}));
+        opencodeCount++;
       }
 
       return { sessions: sortSessions(sessions) };
@@ -942,7 +1028,7 @@
       const sessions = state.data.sessions || [];
       sessionCount.textContent = sessions.length;
       if (!sessions.length) {
-        sessionsPanel.innerHTML = '<div class="empty">还没有读到 session 日志。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」。<br><span class="small">可选目录：~/.hermes、~/.codex、~/.claude，或它们各自的 sessions/transcripts/projects 子目录</span></div>';
+        sessionsPanel.innerHTML = '<div class="empty">还没有读到 session 日志。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」。<br><span class="small">可选目录：~/.hermes、~/.codex、~/.claude、~/.local/share/opencode，或它们各自的日志子目录</span></div>';
         return;
       }
       sessionsPanel.innerHTML = sessions.map(s => `

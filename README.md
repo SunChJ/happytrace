@@ -5,7 +5,7 @@ HappyTrace is a small observability playground for agent session logs.
 Current scope:
 
 - single-file HTML viewer
-- reads local Hermes, Codex, and Claude session logs
+- reads local Hermes, Codex, Claude, and OpenCode session logs
 - works as a static page with browser directory access
 - supports session list, event timeline, detail panel, search, and filters
 
@@ -39,6 +39,7 @@ Click **连接 sessions 目录** and choose one of these:
 /Users/samsoncj/.claude
 /Users/samsoncj/.claude/transcripts
 /Users/samsoncj/.claude/projects
+/Users/samsoncj/.local/share/opencode
 ```
 
 After permission is granted, the page can:
@@ -110,17 +111,36 @@ It maps Claude entries into events such as:
 - `QueueDequeue`
 - `Snapshot`
 
+### OpenCode
+
+HappyTrace currently reads OpenCode data from:
+
+- `storage/session/global/*.json`
+- `llm-logs/*.jsonl`
+
+This adapter is currently log-centric rather than message-centric. It reconstructs per-session LLM chains from llm logs and joins session metadata from stored session JSON.
+
+It maps OpenCode entries into events such as:
+
+- `LLMRequest`
+- `FirstToken`
+- `LLMResponse`
+- `LLMResponseToolCalls`
+- `LLMError`
+
 ## Notes
 
 - This is intentionally static-first.
 - Browsers cannot silently read arbitrary local files without permission.
 - So the practical model is: first grant directory access, then let the page auto-refresh.
 - The current goal is cross-runtime session log inspection, not a runtime-specific viewer.
+- OpenCode support currently focuses on llm-chain observability; full message/tool-body reconstruction from the SQLite store can be added later.
 
 ## Next ideas
 
 - better tool-call and tool-result pairing
-- more runtime adapters: OpenCode, Gemini CLI
+- deeper OpenCode support via SQLite message/part parsing
+- more runtime adapters: Gemini CLI
 - project / platform grouping
 - richer token / model / source metadata
 - compact mode and foldable long output
