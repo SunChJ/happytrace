@@ -767,7 +767,7 @@
           const userTextParts = (msg.parts || []).map(p => p.data).filter(p => p && p.type === 'text').map(p => p.text || '');
           const userText = userTextParts.join('\n\n') || '[user message]';
           events.push({
-            id: eventId++, time, agent: 'user', type: 'UserPromptSubmit', tool: '', status: 'completed',
+            id: eventId++, time, raw_time: toIsoFromMs(msg.time_created), agent: 'user', type: 'UserPromptSubmit', tool: '', status: 'completed',
             summary: truncate(userText), content: userText, payload: msg
           });
           continue;
@@ -778,19 +778,19 @@
             const p = part.data || {};
             const pTime = inferTime({ session_start: toIsoFromMs(part.time_created) }, eventId - 1, toIsoFromMs(part.time_created));
             if (p.type === 'step-start') {
-              events.push({ id: eventId++, time: pTime, agent, type: 'StepStart', tool: '', status: 'completed', summary: truncate(p.snapshot || 'step-start'), content: '', payload: { message: msg, part } });
+              events.push({ id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: 'StepStart', tool: '', status: 'completed', summary: truncate(p.snapshot || 'step-start'), content: '', payload: { message: msg, part } });
               continue;
             }
             if (p.type === 'step-finish') {
-              events.push({ id: eventId++, time: pTime, agent, type: p.reason === 'tool-calls' ? 'StepFinishToolCalls' : 'StepFinish', tool: '', status: 'completed', summary: truncate(`reason=${p.reason || '-'} · total=${p.tokens?.total ?? '-'}`), content: '', payload: { message: msg, part }, output: JSON.stringify(p.tokens || {}, null, 2) });
+              events.push({ id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: p.reason === 'tool-calls' ? 'StepFinishToolCalls' : 'StepFinish', tool: '', status: 'completed', summary: truncate(`reason=${p.reason || '-'} · total=${p.tokens?.total ?? '-'}`), content: '', payload: { message: msg, part }, output: JSON.stringify(p.tokens || {}, null, 2) });
               continue;
             }
             if (p.type === 'text') {
-              events.push({ id: eventId++, time: pTime, agent, type: 'AssistantMessage', tool: '', status: 'completed', summary: truncate(p.text || ''), content: p.text || '', payload: { message: msg, part } });
+              events.push({ id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: 'AssistantMessage', tool: '', status: 'completed', summary: truncate(p.text || ''), content: p.text || '', payload: { message: msg, part } });
               continue;
             }
             if (p.type === 'reasoning') {
-              events.push({ id: eventId++, time: pTime, agent, type: 'Reasoning', tool: '', status: 'completed', summary: truncate(p.text || '[reasoning]'), content: p.text || '', payload: { message: msg, part } });
+              events.push({ id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: 'Reasoning', tool: '', status: 'completed', summary: truncate(p.text || '[reasoning]'), content: p.text || '', payload: { message: msg, part } });
               continue;
             }
             if (p.type === 'tool') {
@@ -799,14 +799,14 @@
               const output = typeof state.output === 'string' ? state.output : JSON.stringify(state.output || {}, null, 2);
               const durationMs = state.time?.start && state.time?.end ? (state.time.end - state.time.start) : null;
               events.push({
-                id: eventId++, time: pTime, agent, type: 'ToolCall', tool: p.tool || '', status: 'completed',
+                id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: 'ToolCall', tool: p.tool || '', status: 'completed',
                 summary: truncate(`${p.tool || 'tool'} · ${state.title || state.status || 'call'}`),
                 content: inputText,
                 payload: { message: msg, part, tool_state: state, duration_ms: durationMs },
                 output: ''
               });
               events.push({
-                id: eventId++, time: pTime, agent: 'tool', type: 'ToolResult', tool: p.tool || '', status: state.status === 'error' ? 'error' : 'completed',
+                id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent: 'tool', type: 'ToolResult', tool: p.tool || '', status: state.status === 'error' ? 'error' : 'completed',
                 summary: truncate(`${p.tool || 'tool'} · ${state.status || 'completed'}${durationMs != null ? ` · ${durationMs}ms` : ''}`),
                 content: inputText,
                 payload: { message: msg, part, tool_state: state, duration_ms: durationMs },
@@ -822,9 +822,23 @@
       return events;
     }
 
-    function normalizeOpenCodeExportedSession(exported, sessionIndex = 0) {
+    function mergeEventsByTime(...eventLists) {
+      const merged = eventLists.flat().filter(Boolean).sort((a, b) => {
+        const ta = a.sort_time || a.raw_time || a.time || '';
+        const tb = b.sort_time || b.raw_time || b.time || '';
+        return String(ta).localeCompare(String(tb));
+      });
+      return merged.map((event, idx) => ({ ...event, id: idx + 1 }));
+    }
+
+    function normalizeOpenCodeExportedSession(exported, sessionIndex = 0, llmEntries = []) {
       const sess = exported.session || {};
-      const events = mapOpenCodeExportedSessionToEvents(exported);
+      const deepEvents = mapOpenCodeExportedSessionToEvents(exported).map(e => ({ ...e, sort_time: e.time }));
+      const llmEvents = mapOpenCodeLogEntriesToEvents(llmEntries, {
+        session_start: llmEntries[0]?.timestamp || toIsoFromMs(sess.time_created),
+        last_updated: llmEntries.at(-1)?.timestamp || toIsoFromMs(sess.time_updated)
+      }).map(e => ({ ...e, sort_time: e.payload?.timestamp || e.time }));
+      const events = mergeEventsByTime(deepEvents, llmEvents);
       const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
       return {
         id: sess.id || `opencode_export_${sessionIndex}`,
@@ -832,12 +846,12 @@
         project: sess.project_id || 'opencode',
         project_path: sess.directory || '',
         runtime: 'OpenCode',
-        started_at: toIsoFromMs(sess.time_created),
-        last_event_at: toIsoFromMs(sess.time_updated),
+        started_at: llmEntries[0]?.timestamp || toIsoFromMs(sess.time_created),
+        last_event_at: llmEntries.at(-1)?.timestamp || toIsoFromMs(sess.time_updated),
         agents: roles,
         events,
-        raw: { ...exported, message_count: exported.messages?.length || 0, model: exported.messages?.find?.(m => m.data?.modelID)?.data?.modelID || '' },
-        index_meta: { slug: sess.slug || '', source_path: 'happytrace-export' }
+        raw: { ...exported, llm_logs: llmEntries, message_count: exported.messages?.length || 0, model: exported.messages?.find?.(m => m.data?.modelID)?.data?.modelID || llmEntries[0]?.modelID || '' },
+        index_meta: { slug: sess.slug || '', source_path: llmEntries.length ? 'happytrace-export+llm-logs' : 'happytrace-export' }
       };
     }
 
@@ -1047,8 +1061,10 @@
 
       const exportedOpenCodeIDs = new Set();
       for (const exported of opencodeExportedSessions) {
-        sessions.push(normalizeOpenCodeExportedSession(exported, opencodeCount++));
-        if (exported?.session?.id) exportedOpenCodeIDs.add(exported.session.id);
+        const sessionID = exported?.session?.id;
+        const llmEntries = sessionID ? (opencodeLogEntries[sessionID] || []).sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0)) : [];
+        sessions.push(normalizeOpenCodeExportedSession(exported, opencodeCount++, llmEntries));
+        if (sessionID) exportedOpenCodeIDs.add(sessionID);
       }
       for (const [sessionID, entries] of Object.entries(opencodeLogEntries)) {
         if (exportedOpenCodeIDs.has(sessionID)) continue;

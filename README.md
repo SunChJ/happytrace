@@ -155,7 +155,7 @@ The deep export reconstructs OpenCode sessions from SQLite `session` / `message`
 - `StepFinish`
 - `StepFinishToolCalls`
 
-If both exported JSON and llm logs exist for the same OpenCode session, HappyTrace prefers the exported deep-session view.
+If both exported JSON and llm logs exist for the same OpenCode session, HappyTrace now merges them into one timeline: deep message/tool/step events plus LLM request/first-token/response chain events.
 
 ## Notes
 
