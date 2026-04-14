@@ -1247,6 +1247,27 @@
       renderDetail();
     }
 
+    function renderOpenCodeToolExtras(e) {
+      const state = e.payload?.tool_state;
+      if (!state) return '';
+      const durationMs = e.payload?.duration_ms;
+      const metadata = state.metadata ? JSON.stringify(state.metadata, null, 2) : '';
+      const title = state.title || '';
+      return `
+        <div class="section">
+          <div class="section-title">OpenCode Tool Meta</div>
+          <div class="detail-grid">
+            <div>Tool Status</div><div class="${state.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(state.status || '-')}</div>
+            <div>Tool Title</div><div>${escapeHtml(title || '-')}</div>
+            <div>Duration</div><div class="mono">${durationMs != null ? escapeHtml(String(durationMs) + ' ms') : '-'}</div>
+            <div>Started</div><div class="mono">${state.time?.start ? escapeHtml(toIsoFromMs(state.time.start)) : '-'}</div>
+            <div>Ended</div><div class="mono">${state.time?.end ? escapeHtml(toIsoFromMs(state.time.end)) : '-'}</div>
+          </div>
+        </div>
+        ${metadata ? `<div class="section"><div class="section-title">OpenCode Tool Metadata</div><pre>${escapeHtml(metadata)}</pre></div>` : ''}
+      `;
+    }
+
     function renderDetail() {
       const s = currentSession();
       const e = (s?.events || []).find(x => String(x.id) === String(state.activeEventId));
@@ -1255,6 +1276,7 @@
         detailTitle.textContent = '未选中';
         return;
       }
+      const isOpenCodeToolEvent = s?.runtime === 'OpenCode' && (e.type === 'ToolCall' || e.type === 'ToolResult') && e.payload?.tool_state;
       detailTitle.textContent = `${e.type || 'Event'} #${e.id}`;
       detailPanel.innerHTML = `
         <div class="detail-grid">
@@ -1265,6 +1287,7 @@
           <div>Status</div><div class="${e.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(e.status || '-')}</div>
           <div>Summary</div><div>${escapeHtml(e.summary || '-')}</div>
         </div>
+        ${isOpenCodeToolEvent ? renderOpenCodeToolExtras(e) : ''}
         ${e.content ? `<div class="section"><div class="section-title">Content / Input</div><pre>${escapeHtml(e.content)}</pre></div>` : ''}
         ${e.output ? `<div class="section"><div class="section-title">Output / Reasoning</div><pre>${escapeHtml(e.output)}</pre></div>` : ''}
         ${e.payload ? `<div class="section"><div class="section-title">Payload</div><pre>${escapeHtml(JSON.stringify(e.payload, null, 2))}</pre></div>` : ''}
