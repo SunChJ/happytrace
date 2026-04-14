@@ -67,6 +67,10 @@
     .mono { font-family: var(--mono); }
     .summary { color: #dbe5ff; }
     .badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 8px; border: 1px solid transparent; width: fit-content; font-size: 11px; white-space: nowrap; }
+    .source-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 7px; border: 1px solid rgba(255,255,255,.12); color: #b8c4dd; background: rgba(255,255,255,.04); font-size: 10px; white-space: nowrap; margin-left: 6px; }
+    .src-deep { border-color: rgba(94,223,255,.28); color: var(--cyan); background: rgba(94,223,255,.1); }
+    .src-llm { border-color: rgba(255,209,102,.28); color: var(--yellow); background: rgba(255,209,102,.1); }
+    .src-mixed { border-color: rgba(61,220,151,.28); color: var(--green); background: rgba(61,220,151,.1); }
     .t-UserPromptSubmit { color: var(--purple); border-color: rgba(199,146,234,.35); background: rgba(199,146,234,.12); }
     .t-AssistantMessage { color: #a5b4fc; border-color: rgba(165,180,252,.35); background: rgba(165,180,252,.1); }
     .t-AssistantToolCall { color: var(--yellow); border-color: rgba(255,209,102,.35); background: rgba(255,209,102,.12); }
@@ -1214,6 +1218,20 @@
       });
     }
 
+    function getEventSourceInfo(session, event) {
+      if (session?.runtime !== 'OpenCode') return null;
+      if (event?.payload?.message || event?.payload?.part || event?.payload?.tool_state) {
+        return { label: 'deep', className: 'src-deep' };
+      }
+      if (event?.payload?.callID || event?.payload?.timestampMs || event?.type?.startsWith('LLM')) {
+        return { label: 'llm', className: 'src-llm' };
+      }
+      if (session?.index_meta?.source_path === 'happytrace-export+llm-logs') {
+        return { label: 'mixed', className: 'src-mixed' };
+      }
+      return null;
+    }
+
     function renderEvents() {
       const s = currentSession();
       const events = visibleEvents(s);
@@ -1225,16 +1243,18 @@
         return;
       }
       if (!events.some(e => String(e.id) === String(state.activeEventId))) state.activeEventId = events[0].id;
-      eventsPanel.innerHTML = `<div class="event-list">${events.map(e => `
+      eventsPanel.innerHTML = `<div class="event-list">${events.map(e => {
+        const source = getEventSourceInfo(s, e);
+        return `
         <div class="event-row ${String(e.id) === String(state.activeEventId) ? 'active' : ''}" data-event-id="${e.id}">
           <div class="mono">#${e.id}</div>
           <div class="mono">${escapeHtml(e.time || '')}</div>
           <div>${escapeHtml(e.agent || '-')}</div>
-          <div><span class="badge t-${escapeHtml(e.type || 'Unknown')}">${escapeHtml(e.type || '-')}</span></div>
+          <div><span class="badge t-${escapeHtml(e.type || 'Unknown')}">${escapeHtml(e.type || '-')}</span>${source ? `<span class="source-badge ${source.className}">${escapeHtml(source.label)}</span>` : ''}</div>
           <div class="mono ${e.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(e.tool || e.status || '-')}</div>
           <div class="summary">${escapeHtml(e.summary || '')}</div>
         </div>
-      `).join('')}</div>`;
+      `;}).join('')}</div>`;
       [...eventsPanel.querySelectorAll('.event-row')].forEach(el => {
         el.onclick = () => {
           state.activeEventId = el.dataset.eventId;
@@ -1277,6 +1297,7 @@
         return;
       }
       const isOpenCodeToolEvent = s?.runtime === 'OpenCode' && (e.type === 'ToolCall' || e.type === 'ToolResult') && e.payload?.tool_state;
+      const source = getEventSourceInfo(s, e);
       detailTitle.textContent = `${e.type || 'Event'} #${e.id}`;
       detailPanel.innerHTML = `
         <div class="detail-grid">
@@ -1284,6 +1305,7 @@
           <div>Type</div><div>${escapeHtml(e.type || '-')}</div>
           <div>Tool</div><div class="mono">${escapeHtml(e.tool || '-')}</div>
           <div>Time</div><div class="mono">${escapeHtml(e.time || '-')}</div>
+          <div>Source</div><div>${source ? `<span class="source-badge ${source.className}">${escapeHtml(source.label)}</span>` : '-'}</div>
           <div>Status</div><div class="${e.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(e.status || '-')}</div>
           <div>Summary</div><div>${escapeHtml(e.summary || '-')}</div>
         </div>
