@@ -13,6 +13,7 @@ Current scope:
 
 - `happytrace.html` — current local-session log viewer
 - `prototypes/agent-observer.html` — earlier generic observer prototype
+- `scripts/export_opencode_sessions.py` — export OpenCode SQLite sessions into HappyTrace-readable JSON
 
 ## How to use
 
@@ -113,14 +114,15 @@ It maps Claude entries into events such as:
 
 ### OpenCode
 
-HappyTrace currently reads OpenCode data from:
+HappyTrace supports OpenCode in two layers.
+
+#### Layer 1: llm log view
+It reads:
 
 - `storage/session/global/*.json`
 - `llm-logs/*.jsonl`
 
-This adapter is currently log-centric rather than message-centric. It reconstructs per-session LLM chains from llm logs and joins session metadata from stored session JSON.
-
-It maps OpenCode entries into events such as:
+and reconstructs the per-session LLM chain with events such as:
 
 - `LLMRequest`
 - `FirstToken`
@@ -128,18 +130,45 @@ It maps OpenCode entries into events such as:
 - `LLMResponseToolCalls`
 - `LLMError`
 
+#### Layer 2: deep session export
+For deeper OpenCode inspection, run:
+
+```bash
+python3 scripts/export_opencode_sessions.py
+```
+
+By default it exports into:
+
+```text
+~/.local/share/opencode/happytrace-cache
+```
+
+This produces `opencode-session-*.json` files that HappyTrace can read automatically when you point it at `~/.local/share/opencode`.
+
+The deep export reconstructs OpenCode sessions from SQLite `session` / `message` / `part` tables and surfaces events such as:
+
+- `UserPromptSubmit`
+- `AssistantMessage`
+- `Reasoning`
+- `ToolResult`
+- `StepStart`
+- `StepFinish`
+- `StepFinishToolCalls`
+
+If both exported JSON and llm logs exist for the same OpenCode session, HappyTrace prefers the exported deep-session view.
+
 ## Notes
 
 - This is intentionally static-first.
 - Browsers cannot silently read arbitrary local files without permission.
 - So the practical model is: first grant directory access, then let the page auto-refresh.
 - The current goal is cross-runtime session log inspection, not a runtime-specific viewer.
-- OpenCode support currently focuses on llm-chain observability; full message/tool-body reconstruction from the SQLite store can be added later.
+- OpenCode now has a deeper path via exporter because browser-only static HTML cannot directly query local SQLite without bundling a database engine.
 
 ## Next ideas
 
-- better tool-call and tool-result pairing
-- deeper OpenCode support via SQLite message/part parsing
+- better cross-runtime event normalization
+- deeper OpenCode support for more part types and tool metadata
 - more runtime adapters: Gemini CLI
 - project / platform grouping
 - richer token / model / source metadata
