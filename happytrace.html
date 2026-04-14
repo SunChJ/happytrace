@@ -109,6 +109,8 @@
         <select id="typeFilter"><option value="">全部类型</option></select>
         <select id="agentFilter"><option value="">全部 role</option></select>
         <button id="connectBtn">连接 sessions 目录</button>
+        <button id="openCodeDbBtn">载入 OpenCode DB</button>
+        <input id="opencodeDbInput" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream" style="display:none" />
         <input id="folderInput" type="file" webkitdirectory directory multiple />
         <button id="reloadBtn">重新加载</button>
       </div>
@@ -151,6 +153,7 @@
     const AUTO_REFRESH_MS = 5000;
     let autoRefreshTimer = null;
     let directoryHandle = null;
+    let sqlJsPromise = null;
 
     let state = {
       data: { sessions: [] },
@@ -175,6 +178,45 @@
     const typeFilter = $('#typeFilter');
     const agentFilter = $('#agentFilter');
     const statusBar = $('#statusBar');
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[data-src="${src}"]`);
+        if (existing) {
+          if (existing.dataset.loaded === 'true') {
+            resolve();
+            return;
+          }
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', () => reject(new Error(`加载脚本失败: ${src}`)), { once: true });
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.dataset.src = src;
+        script.onload = () => {
+          script.dataset.loaded = 'true';
+          resolve();
+        };
+        script.onerror = () => reject(new Error(`加载脚本失败: ${src}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function loadSqlJsLibrary() {
+      if (!sqlJsPromise) {
+        sqlJsPromise = (async () => {
+          if (!window.initSqlJs) {
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js');
+          }
+          return await window.initSqlJs({
+            locateFile: (file) => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/${file}`
+          });
+        })();
+      }
+      return await sqlJsPromise;
+    }
 
     function openDB() {
       return new Promise((resolve, reject) => {
@@ -234,6 +276,11 @@
 
     function safeJsonParse(text) {
       try { return JSON.parse(text); } catch { return null; }
+    }
+
+    function sqlRowsToObjects(result) {
+      if (!result?.columns || !result?.values) return [];
+      return result.values.map(row => Object.fromEntries(result.columns.map((col, idx) => [col, row[idx]])));
     }
 
     function parseJsonl(text) {
@@ -1192,6 +1239,109 @@
       return await loadUnifiedSessions(files);
     }
 
+    function reconstructOpenCodeExportsFromDb(sqlDb) {
+      const sessionRows = sqlRowsToObjects(sqlDb.exec(`
+        select id, slug, project_id, directory, title, version, time_created, time_updated
+        from session
+        order by time_updated desc
+      `)[0]);
+      const messageRows = sqlRowsToObjects(sqlDb.exec(`
+        select session_id, id, time_created, time_updated, data
+        from message
+        order by time_created asc, id asc
+      `)[0]);
+      const partRows = sqlRowsToObjects(sqlDb.exec(`
+        select session_id, message_id, time_created, time_updated, data
+        from part
+        order by time_created asc, id asc
+      `)[0]);
+
+      const messagesBySession = new Map();
+      const partsByMessage = new Map();
+
+      for (const row of messageRows) {
+        const parsed = safeJsonParse(row.data);
+        const list = messagesBySession.get(row.session_id) || [];
+        list.push({
+          id: row.id,
+          time_created: row.time_created,
+          time_updated: row.time_updated,
+          data: parsed ?? row.data,
+          parts: []
+        });
+        messagesBySession.set(row.session_id, list);
+      }
+
+      for (const row of partRows) {
+        const parsed = safeJsonParse(row.data);
+        const list = partsByMessage.get(row.message_id) || [];
+        list.push({
+          time_created: row.time_created,
+          time_updated: row.time_updated,
+          data: parsed ?? row.data
+        });
+        partsByMessage.set(row.message_id, list);
+      }
+
+      return sessionRows.map(sess => ({
+        happytrace_format: 'opencode-session-v1',
+        runtime: 'OpenCode',
+        session: {
+          id: sess.id,
+          slug: sess.slug,
+          project_id: sess.project_id,
+          directory: sess.directory,
+          title: sess.title,
+          version: sess.version,
+          time_created: sess.time_created,
+          time_updated: sess.time_updated,
+        },
+        messages: (messagesBySession.get(sess.id) || []).map(message => ({
+          ...message,
+          parts: partsByMessage.get(message.id) || []
+        }))
+      }));
+    }
+
+    async function loadFromOpenCodeDbFile(file) {
+      const SQL = await loadSqlJsLibrary();
+      const buffer = await file.arrayBuffer();
+      const db = new SQL.Database(new Uint8Array(buffer));
+      try {
+        const exportedSessions = reconstructOpenCodeExportsFromDb(db);
+        const sessions = exportedSessions.map((exported, idx) => normalizeOpenCodeExportedSession(exported, idx, []));
+        sessions.sort((a, b) => (toEpochMs(b.last_event_at) || 0) - (toEpochMs(a.last_event_at) || 0));
+        return { sessions };
+      } finally {
+        db.close();
+      }
+    }
+
+    async function connectOpenCodeDb() {
+      if (window.showOpenFilePicker) {
+        const [handle] = await window.showOpenFilePicker({
+          multiple: false,
+          types: [{
+            description: 'OpenCode SQLite DB',
+            accept: {
+              'application/octet-stream': ['.db', '.sqlite', '.sqlite3']
+            }
+          }]
+        });
+        if (!handle) return;
+        const file = await handle.getFile();
+        state.data = await loadFromOpenCodeDbFile(file);
+        state.sourceMode = 'opencode-db';
+        state.lastLoadedAt = new Date().toLocaleTimeString();
+        state.activeSessionId = state.data.sessions[0]?.id || null;
+        state.activeEventId = null;
+        hydrateFilters();
+        render();
+        return;
+      }
+      $('#opencodeDbInput').click();
+    }
+
     async function connectDirectory() {
       if (!window.showDirectoryPicker) {
         alert('当前浏览器不支持目录连接。可改用右侧文件夹选择，或用 Chrome/Arc 打开。');
@@ -1251,7 +1401,7 @@
       const sessions = state.data.sessions || [];
       sessionCount.textContent = sessions.length;
       if (!sessions.length) {
-        sessionsPanel.innerHTML = '<div class="empty">还没有读到 session 日志。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」。<br><span class="small">可选目录：~/.hermes、~/.codex、~/.claude、~/.local/share/opencode，或它们各自的日志子目录</span></div>';
+        sessionsPanel.innerHTML = '<div class="empty">还没有读到 session 日志。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」或「载入 OpenCode DB」。<br><span class="small">可选目录：~/.hermes、~/.codex、~/.claude、~/.local/share/opencode，或直接选 opencode.db / opencode-local.db</span></div>';
         return;
       }
       sessionsPanel.innerHTML = sessions.map(s => `
@@ -1482,6 +1632,33 @@
     $('#connectBtn').addEventListener('click', async () => {
       try { await connectDirectory(); }
       catch (err) { console.error(err); }
+    });
+
+    $('#openCodeDbBtn').addEventListener('click', async () => {
+      try { await connectOpenCodeDb(); }
+      catch (err) {
+        console.error(err);
+        alert('OpenCode DB 载入失败：' + err.message);
+      }
+    });
+
+    $('#opencodeDbInput').addEventListener('change', async e => {
+      try {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        state.data = await loadFromOpenCodeDbFile(file);
+        state.sourceMode = 'opencode-db';
+        state.lastLoadedAt = new Date().toLocaleTimeString();
+        state.activeSessionId = state.data.sessions[0]?.id || null;
+        state.activeEventId = null;
+        hydrateFilters();
+        render();
+      } catch (err) {
+        console.error(err);
+        alert('OpenCode DB 文件读取失败：' + err.message);
+      } finally {
+        e.target.value = '';
+      }
     });
 
     $('#folderInput').addEventListener('change', async e => {

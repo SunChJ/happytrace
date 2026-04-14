@@ -11,7 +11,7 @@ Current scope:
 
 ## Files
 
-- `happytrace.html` — current local-session log viewer
+- `happytrace.html` — current local-session log viewer（支持一键载入 OpenCode DB）
 - `prototypes/agent-observer.html` — earlier generic observer prototype
 - `scripts/export_opencode_sessions.py` — export OpenCode SQLite sessions into HappyTrace-readable JSON
 
