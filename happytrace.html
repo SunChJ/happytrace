@@ -6,1756 +6,2014 @@
   <title>HappyTrace</title>
   <style>
     :root {
-      --bg: #0b1020;
-      --panel: #11172a;
-      --panel-2: #0f1526;
-      --muted: #8b97b3;
+      --bg: #070c18;
+      --panel: #0d1425;
+      --panel-2: #111a2e;
+      --panel-3: #172038;
+      --muted: #5a6a8a;
+      --muted-2: #8b97b3;
       --text: #e8ecf7;
-      --line: #24304b;
+      --line: #1a2640;
+      --line-2: #243553;
       --accent: #6ea8fe;
+      --accent-dim: rgba(110,168,254,.12);
+      --accent-glow: rgba(110,168,254,.06);
       --green: #3ddc97;
       --yellow: #ffd166;
       --red: #ff6b6b;
       --purple: #c792ea;
       --cyan: #5edfff;
       --orange: #ff9f43;
-      --shadow: 0 12px 40px rgba(0,0,0,.3);
-      --radius: 14px;
-      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --pink: #f472b6;
+      --shadow: 0 8px 32px rgba(0,0,0,.5);
+      --shadow-sm: 0 2px 8px rgba(0,0,0,.3);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --font: ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: var(--font);
-      background: linear-gradient(180deg, #0a0f1f 0%, #0d1326 100%);
-      color: var(--text);
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh;overflow:hidden}
+
+    /* ── App shell ── */
+    .app{height:100vh;display:grid;grid-template-rows:56px 1fr 32px;gap:10px;padding:10px}
+
+    /* ── Topbar ── */
+    .topbar{
+      background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+      box-shadow:var(--shadow-sm);display:flex;align-items:center;gap:12px;padding:0 14px;
     }
-    .app { height: 100vh; display: grid; grid-template-rows: 72px 1fr 34px; gap: 12px; padding: 12px; }
-    .topbar, .statusbar, .panel { background: rgba(17, 23, 42, .92); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); backdrop-filter: blur(8px); }
-    .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; overflow: hidden; }
-    .brand { font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
-    .hint { color: var(--muted); font-size: 12px; white-space: nowrap; }
-    .grow { flex: 1; }
-    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    input, select, button {
-      background: #0d1427; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit;
+    .brand{display:flex;align-items:center;gap:8px;white-space:nowrap}
+    .brand-icon{
+      width:28px;height:28px;border-radius:8px;
+      background:linear-gradient(135deg,#3a6fd8,#6ea8fe);
+      display:grid;place-items:center;font-size:14px;flex-shrink:0;
     }
-    input[type="file"] { padding: 6px; max-width: 240px; }
-    button { cursor: pointer; }
-    button:hover { border-color: var(--accent); }
-    .layout { min-height: 0; display: grid; grid-template-columns: 340px minmax(0, 1fr) 420px; gap: 12px; }
-    .sidebar { min-height: 0; display: grid; grid-template-rows: minmax(240px, 1fr) minmax(150px, auto) minmax(100px, auto); gap: 12px; }
-    .main { min-height: 0; display: grid; grid-template-rows: 1fr; gap: 12px; }
-    .detailbar { min-height: 0; display: grid; grid-template-rows: 1fr; }
-    .panel { min-height: 0; display: flex; flex-direction: column; }
-    .panel h3 { margin: 0; padding: 12px 14px; font-size: 13px; color: #b6c3df; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
-    .panel-body { min-height: 0; overflow: auto; padding: 10px; }
-    .session-item, .event-row, .agent-chip { border: 1px solid transparent; border-radius: 10px; transition: .15s ease; }
-    .session-item { padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,.02); cursor: pointer; }
-    .session-item:hover, .event-row:hover { border-color: #35518c; background: rgba(110,168,254,.06); }
-    .session-item.active, .event-row.active { border-color: var(--accent); background: rgba(110,168,254,.12); }
-    .session-title { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 13px; }
-    .meta, .meta-grid { color: var(--muted); font-size: 12px; }
-    .meta { margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; }
-    .meta-grid { display: grid; grid-template-columns: 92px 1fr; gap: 8px 10px; }
-    .meta-grid div:nth-child(odd) { color: #9fb0d7; }
-    .agents { display: flex; gap: 8px; flex-wrap: wrap; }
-    .agent-chip { padding: 6px 10px; background: rgba(255,255,255,.03); border-color: var(--line); cursor: pointer; font-size: 12px; }
-    .agent-chip.active { border-color: var(--accent); color: #fff; }
-    .event-list { display: flex; flex-direction: column; gap: 8px; }
-    .event-row { display: grid; grid-template-columns: 54px 72px 100px 126px 94px 1fr; gap: 10px; align-items: start; padding: 10px; background: rgba(255,255,255,.02); cursor: pointer; font-size: 12px; }
-    .mono { font-family: var(--mono); }
-    .summary { color: #dbe5ff; }
-    .badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 8px; border: 1px solid transparent; width: fit-content; font-size: 11px; white-space: nowrap; }
-    .source-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 7px; border: 1px solid rgba(255,255,255,.12); color: #b8c4dd; background: rgba(255,255,255,.04); font-size: 10px; white-space: nowrap; margin-left: 6px; }
-    .src-deep { border-color: rgba(94,223,255,.28); color: var(--cyan); background: rgba(94,223,255,.1); }
-    .src-llm { border-color: rgba(255,209,102,.28); color: var(--yellow); background: rgba(255,209,102,.1); }
-    .src-mixed { border-color: rgba(61,220,151,.28); color: var(--green); background: rgba(61,220,151,.1); }
-    .t-UserPromptSubmit { color: var(--purple); border-color: rgba(199,146,234,.35); background: rgba(199,146,234,.12); }
-    .t-AssistantMessage { color: #a5b4fc; border-color: rgba(165,180,252,.35); background: rgba(165,180,252,.1); }
-    .t-AssistantToolCall { color: var(--yellow); border-color: rgba(255,209,102,.35); background: rgba(255,209,102,.12); }
-    .t-ToolResult { color: var(--green); border-color: rgba(61,220,151,.35); background: rgba(61,220,151,.12); }
-    .t-Stop { color: var(--orange); border-color: rgba(255,159,67,.35); background: rgba(255,159,67,.12); }
-    .t-Unknown { color: var(--cyan); border-color: rgba(94,223,255,.35); background: rgba(94,223,255,.12); }
-    .s-completed { color: var(--green); }
-    .s-error { color: var(--red); }
-    pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 12px; line-height: 1.55; background: #0b1222; border: 1px solid var(--line); border-radius: 12px; padding: 12px; max-height: 300px; overflow: auto; }
-    .detail-grid { display: grid; grid-template-columns: 96px 1fr; gap: 8px 10px; margin-bottom: 12px; font-size: 13px; }
-    .detail-grid div:nth-child(odd) { color: #9fb0d7; }
-    .section { margin-bottom: 12px; }
-    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-    .section-title { color: #b6c3df; font-size: 12px; }
-    .copy-btn {
-      padding: 4px 8px;
-      border-radius: 8px;
-      font-size: 11px;
-      line-height: 1;
-      color: #c9d7f5;
-      background: rgba(255,255,255,.03);
+    .brand-name{font-weight:700;font-size:15px;letter-spacing:-.2px}
+    .divider{width:1px;height:22px;background:var(--line-2);flex-shrink:0}
+
+    /* ── Nav tabs ── */
+    .nav-tabs{display:flex;gap:2px;background:var(--bg);border-radius:8px;padding:3px}
+    .nav-tab{
+      padding:5px 14px;border-radius:6px;border:none;background:transparent;
+      color:var(--muted-2);font:inherit;font-size:13px;cursor:pointer;transition:.15s;
+      white-space:nowrap;
     }
-    .copy-btn[data-copied="true"] {
-      color: var(--green);
-      border-color: rgba(61,220,151,.35);
-      background: rgba(61,220,151,.1);
+    .nav-tab:hover{color:var(--text);background:var(--panel-2)}
+    .nav-tab.active{background:var(--panel-2);color:var(--accent);font-weight:600;border:1px solid var(--line-2)}
+    .nav-tab.active:hover{background:var(--panel-3)}
+
+    .grow{flex:1}
+    .toolbar{display:flex;gap:7px;align-items:center;flex-wrap:nowrap}
+
+    /* ── Inputs / buttons ── */
+    input,select,button{
+      background:var(--panel-2);color:var(--text);border:1px solid var(--line-2);
+      border-radius:var(--radius-sm);padding:6px 10px;font:inherit;font-size:13px;
     }
-    .statusbar { display: flex; align-items: center; gap: 14px; padding: 0 12px; color: var(--muted); font-size: 12px; overflow: auto; white-space: nowrap; }
-    .empty { color: var(--muted); display: grid; place-items: center; height: 100%; text-align: center; padding: 24px; }
-    .pill { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; }
-    .good { color: var(--green); }
-    .warn { color: var(--yellow); }
-    .small { font-size: 11px; color: var(--muted); }
-    @media (max-width: 1400px) {
-      .layout { grid-template-columns: 300px minmax(0, 1fr) 360px; }
-      .event-row { grid-template-columns: 48px 68px 90px 110px 88px 1fr; }
+    input[type="file"]{padding:5px 8px;max-width:200px;font-size:12px}
+    input::placeholder{color:var(--muted)}
+    select{cursor:pointer}
+    button{cursor:pointer;transition:.15s;white-space:nowrap}
+    button:hover{border-color:var(--accent);color:var(--accent)}
+    button.primary{background:var(--accent-dim);border-color:rgba(110,168,254,.35);color:var(--accent)}
+    button.primary:hover{background:rgba(110,168,254,.2)}
+    #searchInput{width:200px}
+
+    /* ── Views ── */
+    .view{min-height:0;display:grid}
+    .view.hidden{display:none}
+
+    /* ── Sessions layout ── */
+    .sessions-layout{
+      min-height:0;display:grid;
+      grid-template-columns:320px minmax(0,1fr) 400px;
+      gap:10px;
     }
-    @media (max-width: 1100px) {
-      .layout { grid-template-columns: 1fr; }
-      .detailbar { min-height: 280px; }
-      .event-row { grid-template-columns: 48px 68px 90px 110px 88px 1fr; }
+    .sidebar{min-height:0;display:grid;grid-template-rows:minmax(220px,1fr) auto auto;gap:10px}
+    .main{min-height:0}
+    .detailbar{min-height:0}
+
+    /* ── Panel ── */
+    .panel{
+      min-height:0;display:flex;flex-direction:column;
+      background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+      box-shadow:var(--shadow-sm);overflow:hidden;
+    }
+    .panel-head{
+      display:flex;align-items:center;justify-content:space-between;gap:8px;
+      padding:10px 13px;border-bottom:1px solid var(--line);flex-shrink:0;
+    }
+    .panel-head-title{font-size:12px;font-weight:600;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px}
+    .panel-head-count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;font-family:var(--mono)}
+    .panel-body{min-height:0;overflow:auto;padding:8px}
+
+    /* ── Session list ── */
+    .session-item{
+      padding:10px 11px;margin-bottom:6px;background:rgba(255,255,255,.02);
+      border:1px solid transparent;border-radius:10px;cursor:pointer;transition:.12s;
+    }
+    .session-item:hover{border-color:var(--line-2);background:rgba(110,168,254,.05)}
+    .session-item.active{border-color:var(--accent);background:var(--accent-dim)}
+    .session-title{font-weight:600;font-size:13px;display:flex;justify-content:space-between;gap:8px;margin-bottom:5px}
+    .session-title span:last-child{color:var(--muted);font-family:var(--mono);font-weight:400;font-size:11px;flex-shrink:0}
+    .session-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .session-time{color:var(--muted);font-size:11px;font-family:var(--mono);margin-top:4px}
+
+    /* ── Badges ── */
+    .badge{
+      display:inline-flex;align-items:center;border-radius:999px;
+      padding:2px 7px;border:1px solid transparent;font-size:11px;white-space:nowrap;font-weight:500;
+    }
+    .runtime-badge{padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;letter-spacing:.3px}
+    .rt-OpenCode{background:rgba(110,168,254,.15);color:var(--accent);border:1px solid rgba(110,168,254,.3)}
+    .rt-Claude{background:rgba(255,159,67,.15);color:var(--orange);border:1px solid rgba(255,159,67,.3)}
+    .rt-Hermes{background:rgba(199,146,234,.15);color:var(--purple);border:1px solid rgba(199,146,234,.3)}
+    .rt-Codex{background:rgba(61,220,151,.15);color:var(--green);border:1px solid rgba(61,220,151,.3)}
+    .rt-Unknown{background:rgba(139,151,179,.1);color:var(--muted-2);border:1px solid var(--line-2)}
+    .model-chip{padding:1px 6px;border-radius:4px;font-size:10px;background:rgba(255,255,255,.04);border:1px solid var(--line-2);color:var(--muted-2);font-family:var(--mono)}
+
+    /* ── Meta grid ── */
+    .meta-grid{display:grid;grid-template-columns:90px 1fr;gap:6px 10px;font-size:12px}
+    .meta-grid .k{color:var(--muted-2)}
+    .meta-grid .v{color:var(--text);word-break:break-all}
+    .meta-grid .v.mono{font-family:var(--mono);font-size:11px}
+
+    /* ── Roles / agents ── */
+    .agents{display:flex;gap:6px;flex-wrap:wrap}
+    .agent-chip{
+      padding:4px 9px;border-radius:6px;font-size:12px;cursor:pointer;
+      background:rgba(255,255,255,.03);border:1px solid var(--line-2);transition:.12s;
+    }
+    .agent-chip:hover{border-color:var(--accent)}
+    .agent-chip.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+
+    /* ── Event list ── */
+    .event-list{display:flex;flex-direction:column;gap:5px}
+    .event-row{
+      display:grid;grid-template-columns:40px 64px 88px 130px 84px 1fr;
+      gap:8px;align-items:start;padding:8px 10px;
+      background:rgba(255,255,255,.02);border:1px solid transparent;
+      border-radius:8px;cursor:pointer;font-size:12px;transition:.1s;
+    }
+    .event-row:hover{border-color:var(--line-2);background:rgba(110,168,254,.04)}
+    .event-row.active{border-color:var(--accent);background:var(--accent-dim)}
+    .event-num{color:var(--muted);font-family:var(--mono);font-size:11px}
+    .event-time{color:var(--muted);font-family:var(--mono);font-size:11px}
+    .event-agent{color:var(--muted-2);font-size:11px}
+    .event-tool{font-family:var(--mono);font-size:11px}
+    .event-summary{color:#d0dbf0;line-height:1.4}
+    .s-completed{color:var(--green)}
+    .s-error{color:var(--red)}
+
+    /* ── Event type badges ── */
+    .t-UserPromptSubmit{color:var(--purple);border-color:rgba(199,146,234,.4);background:rgba(199,146,234,.1)}
+    .t-AssistantMessage{color:#a5b4fc;border-color:rgba(165,180,252,.35);background:rgba(165,180,252,.08)}
+    .t-AssistantToolCall,.t-ToolCall{color:var(--yellow);border-color:rgba(255,209,102,.35);background:rgba(255,209,102,.1)}
+    .t-ToolResult{color:var(--green);border-color:rgba(61,220,151,.35);background:rgba(61,220,151,.1)}
+    .t-Stop{color:var(--orange);border-color:rgba(255,159,67,.35);background:rgba(255,159,67,.1)}
+    .t-LLMRequest{color:var(--cyan);border-color:rgba(94,223,255,.35);background:rgba(94,223,255,.08)}
+    .t-LLMResponse,.t-LLMResponseToolCalls{color:var(--accent);border-color:rgba(110,168,254,.35);background:rgba(110,168,254,.08)}
+    .t-FirstToken{color:var(--green);border-color:rgba(61,220,151,.25);background:rgba(61,220,151,.06)}
+    .t-Reasoning{color:var(--pink);border-color:rgba(244,114,182,.35);background:rgba(244,114,182,.08)}
+    .t-StepStart,.t-StepFinish,.t-StepFinishToolCalls{color:#94a3b8;border-color:rgba(148,163,184,.25);background:rgba(148,163,184,.06)}
+    .t-Unknown{color:var(--muted-2);border-color:var(--line-2);background:rgba(255,255,255,.03)}
+
+    /* ── Source badges ── */
+    .source-badge{
+      display:inline-flex;align-items:center;border-radius:999px;
+      padding:1px 6px;border:1px solid rgba(255,255,255,.1);color:var(--muted);
+      font-size:10px;white-space:nowrap;margin-left:5px;
+    }
+    .src-deep{border-color:rgba(94,223,255,.3);color:var(--cyan);background:rgba(94,223,255,.08)}
+    .src-llm{border-color:rgba(255,209,102,.3);color:var(--yellow);background:rgba(255,209,102,.08)}
+    .src-mixed{border-color:rgba(61,220,151,.3);color:var(--green);background:rgba(61,220,151,.08)}
+
+    /* ── Detail panel ── */
+    .detail-grid{display:grid;grid-template-columns:90px 1fr;gap:6px 10px;font-size:12px;margin-bottom:14px}
+    .detail-grid .k{color:var(--muted-2)}
+    .detail-grid .v{color:var(--text);word-break:break-all}
+    .detail-grid .v.mono{font-family:var(--mono);font-size:11px}
+    .section{margin-bottom:12px}
+    .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .section-title{font-size:11px;font-weight:600;color:var(--muted-2);text-transform:uppercase;letter-spacing:.4px}
+    pre{
+      white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:11px;
+      line-height:1.6;background:#060b16;border:1px solid var(--line);border-radius:8px;
+      padding:10px 12px;max-height:280px;overflow:auto;
+    }
+    .copy-btn{
+      padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;
+      color:var(--muted-2);background:rgba(255,255,255,.03);border:1px solid var(--line-2);transition:.1s;
+    }
+    .copy-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .copy-btn[data-copied="true"]{color:var(--green);border-color:rgba(61,220,151,.4);background:rgba(61,220,151,.08)}
+
+    /* ── Analytics view ── */
+    .analytics-wrap{min-height:0;display:flex;flex-direction:column;gap:10px;overflow:auto;padding-right:2px}
+    .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex-shrink:0}
+    .kpi-card{
+      background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+      padding:14px 16px;position:relative;overflow:hidden;
+    }
+    .kpi-card::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:2px;
+      background:var(--kpi-color,var(--accent));
+    }
+    .kpi-label{font-size:11px;color:var(--muted-2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+    .kpi-value{font-size:24px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+    .kpi-sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+    .charts-grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      grid-template-rows:auto auto;
+      gap:10px;
+    }
+    .chart-card{
+      background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+      padding:16px;display:flex;flex-direction:column;gap:10px;min-height:0;
+    }
+    .chart-card.wide{grid-column:span 2}
+    .chart-card.full{grid-column:span 3}
+    .chart-title{font-size:12px;font-weight:600;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
+    .chart-subtitle{font-size:11px;color:var(--muted);margin-top:-6px;flex-shrink:0}
+    .chart-wrap{position:relative;height:200px;flex:1}
+    .chart-wrap.tall{height:250px}
+    .chart-empty{
+      position:absolute;inset:0;display:none;place-items:center;
+      color:var(--muted);font-size:12px;text-align:center;
+    }
+
+    /* Model table in analytics */
+    .model-table{width:100%;border-collapse:collapse;font-size:12px}
+    .model-table th{
+      text-align:left;padding:6px 8px;color:var(--muted-2);font-weight:600;
+      font-size:11px;text-transform:uppercase;letter-spacing:.4px;
+      border-bottom:1px solid var(--line);
+    }
+    .model-table td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--text)}
+    .model-table tr:last-child td{border-bottom:none}
+    .model-table tr:hover td{background:rgba(255,255,255,.02)}
+    .model-table .num{font-family:var(--mono);font-size:11px;color:var(--muted-2);text-align:right}
+    .model-table .model-name{font-family:var(--mono);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+    /* Analytics range selector */
+    .range-btns{display:flex;gap:4px}
+    .range-btn{
+      padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer;
+      color:var(--muted-2);background:transparent;border:1px solid transparent;transition:.12s;
+    }
+    .range-btn:hover{border-color:var(--line-2);color:var(--text)}
+    .range-btn.active{background:var(--accent-dim);border-color:rgba(110,168,254,.35);color:var(--accent)}
+
+    /* ── Status bar ── */
+    .statusbar{
+      background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);
+      display:flex;align-items:center;gap:14px;padding:0 12px;
+      color:var(--muted);font-size:11px;overflow:hidden;white-space:nowrap;
+    }
+    .statusbar span::before{content:'·';margin-right:8px;opacity:.4}
+    .statusbar span:first-child::before{display:none}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px;flex-shrink:0}
+    .status-dot.live{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+    /* ── Misc ── */
+    .empty{color:var(--muted);display:grid;place-items:center;height:100%;text-align:center;padding:24px;font-size:13px;line-height:1.6}
+    .mono{font-family:var(--mono)}
+    .good{color:var(--green)}
+    .warn{color:var(--yellow)}
+    .err{color:var(--red)}
+    .pill{padding:2px 7px;border-radius:999px;border:1px solid var(--line-2);color:var(--muted);font-size:11px}
+
+    /* ── Events panel sub-tabs ── */
+    .panel-head-left{display:flex;align-items:center;gap:10px}
+    .panel-subtabs{display:flex;gap:2px;background:var(--bg);border-radius:6px;padding:2px}
+    .panel-subtab{
+      padding:3px 10px;border-radius:5px;border:none;background:transparent;
+      color:var(--muted);font:inherit;font-size:11px;cursor:pointer;transition:.12s;
+    }
+    .panel-subtab:hover{color:var(--text);background:var(--panel-2)}
+    .panel-subtab.active{background:var(--panel-2);color:var(--accent);font-weight:600;border:1px solid var(--line-2)}
+
+    /* ── Session Stats panel ── */
+    .ss-kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+    .ss-kpi{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+    .ss-kpi-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+    .ss-kpi-value{font-size:18px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+    .ss-kpi-sub{font-size:10px;color:var(--muted);margin-top:2px}
+    .ss-charts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .ss-chart-card{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:12px;display:flex;flex-direction:column;gap:8px}
+    .ss-chart-card.full{grid-column:span 2}
+    .ss-chart-title{font-size:11px;font-weight:600;color:var(--muted-2);text-transform:uppercase;letter-spacing:.4px}
+    .ss-chart-wrap{position:relative;height:160px}
+    .ss-chart-wrap.short{height:130px}
+    .ss-chart-empty{position:absolute;inset:0;display:none;place-items:center;color:var(--muted);font-size:11px;text-align:center}
+    .ss-subagents{margin-top:12px}
+    .ss-subagents-title{font-size:11px;font-weight:600;color:var(--muted-2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+    .ss-subagent-item{
+      display:flex;align-items:center;gap:8px;padding:6px 9px;margin-bottom:4px;
+      background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:7px;
+      cursor:pointer;font-size:12px;transition:.12s;
+    }
+    .ss-subagent-item:hover{border-color:var(--accent);background:var(--accent-dim)}
+    .subagent-badge{padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(244,114,182,.12);border:1px solid rgba(244,114,182,.3);color:var(--pink);flex-shrink:0}
+    .parent-badge{padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(94,223,255,.1);border:1px solid rgba(94,223,255,.25);color:var(--cyan);flex-shrink:0}
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:99px}
+    ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+    /* ── Responsive ── */
+    @media(max-width:1400px){
+      .sessions-layout{grid-template-columns:280px minmax(0,1fr) 360px}
+      .event-row{grid-template-columns:36px 58px 80px 118px 78px 1fr}
+      .kpi-row{grid-template-columns:repeat(5,1fr)}
+      .charts-grid{grid-template-columns:repeat(2,1fr)}
+      .chart-card.wide{grid-column:span 2}
+      .chart-card.full{grid-column:span 2}
+    }
+    @media(max-width:1100px){
+      .sessions-layout{grid-template-columns:1fr}
+      .kpi-row{grid-template-columns:repeat(3,1fr)}
     }
   </style>
 </head>
 <body>
-  <div class="app">
-    <div class="topbar">
-      <div>
-        <div class="brand">HappyTrace</div>
-        <div class="hint">静态 HTML，支持读取本地 Hermes / Codex / Claude / OpenCode session 日志；Chrome/Arc 可记住目录并自动刷新</div>
-      </div>
-      <div class="grow"></div>
-      <div class="toolbar">
-        <input id="searchInput" placeholder="搜索消息 / tool / output" />
-        <select id="typeFilter"><option value="">全部类型</option></select>
-        <select id="agentFilter"><option value="">全部 role</option></select>
-        <button id="connectBtn">连接 sessions 目录</button>
-        <button id="openCodeDbBtn">载入 OpenCode DB</button>
-        <input id="opencodeDbInput" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream" style="display:none" />
-        <input id="folderInput" type="file" webkitdirectory directory multiple />
-        <button id="reloadBtn">重新加载</button>
-      </div>
-    </div>
+<div class="app">
 
-    <div class="layout">
+  <!-- ── Top bar ── -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <span class="brand-name">HappyTrace</span>
+    </div>
+    <div class="divider"></div>
+    <nav class="nav-tabs">
+      <button class="nav-tab active" data-view="sessions">Sessions</button>
+      <button class="nav-tab" data-view="analytics">Analytics</button>
+    </nav>
+    <div class="grow"></div>
+    <div class="toolbar">
+      <input id="searchInput" placeholder="搜索消息 / tool / output…" />
+      <select id="typeFilter"><option value="">全部类型</option></select>
+      <select id="agentFilter"><option value="">全部 role</option></select>
+      <button class="primary" id="connectBtn">连接目录</button>
+      <button id="openCodeDbBtn">载入 DB</button>
+      <input id="opencodeDbInput" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream" style="display:none" />
+      <input id="folderInput" type="file" webkitdirectory directory multiple style="display:none" />
+      <button id="folderBtn">选择文件夹</button>
+      <button id="reloadBtn">刷新</button>
+    </div>
+  </div>
+
+  <!-- ── Sessions view ── -->
+  <div id="view-sessions" class="view">
+    <div class="sessions-layout">
+
       <div class="sidebar">
-        <section class="panel">
-          <h3><span>Sessions</span><span id="sessionCount">0</span></h3>
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-head-title">Sessions</span>
+            <span class="panel-head-count" id="sessionCount">0</span>
+          </div>
           <div id="sessionsPanel" class="panel-body"></div>
-        </section>
-        <section class="panel">
-          <h3><span>Session Meta</span></h3>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span class="panel-head-title">Session Meta</span></div>
           <div id="metaPanel" class="panel-body"></div>
-        </section>
-        <section class="panel">
-          <h3><span>Roles</span></h3>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span class="panel-head-title">Roles</span></div>
           <div id="agentsPanel" class="panel-body"></div>
-        </section>
+        </div>
       </div>
 
       <div class="main">
-        <section class="panel">
-          <h3><span>Events</span><span id="eventCount">0</span></h3>
+        <div class="panel" style="height:100%">
+          <div class="panel-head">
+            <div class="panel-head-left">
+              <span class="panel-head-title">Events</span>
+              <div class="panel-subtabs" id="evtSubtabs">
+                <button class="panel-subtab active" data-tab="events">列表</button>
+                <button class="panel-subtab" data-tab="stats">Session Stats</button>
+              </div>
+            </div>
+            <span class="panel-head-count" id="eventCount">0</span>
+          </div>
           <div id="eventsPanel" class="panel-body"></div>
-        </section>
+          <div id="sessionStatsPanel" class="panel-body" style="display:none"></div>
+        </div>
       </div>
 
       <div class="detailbar">
-        <section class="panel">
-          <h3><span>Detail</span><span id="detailTitle">未选中</span></h3>
+        <div class="panel" style="height:100%">
+          <div class="panel-head">
+            <span class="panel-head-title">Detail</span>
+            <span class="panel-head-count" id="detailTitle">—</span>
+          </div>
           <div id="detailPanel" class="panel-body"></div>
-        </section>
+        </div>
       </div>
-    </div>
 
-    <div class="statusbar" id="statusBar"><span>ready</span></div>
+    </div>
   </div>
 
-  <script>
-    const DB_NAME = 'happytrace-db';
-    const STORE = 'kv';
-    const AUTO_REFRESH_MS = 5000;
-    let autoRefreshTimer = null;
-    let directoryHandle = null;
-    let sqlJsPromise = null;
+  <!-- ── Analytics view ── -->
+  <div id="view-analytics" class="view hidden">
+    <div class="analytics-wrap">
 
-    let state = {
-      data: { sessions: [] },
-      activeSessionId: null,
-      activeEventId: null,
-      activeAgent: '',
-      activeType: '',
-      search: '',
-      sourceMode: 'none',
-      lastLoadedAt: null
-    };
+      <!-- KPI row -->
+      <div class="kpi-row">
+        <div class="kpi-card" style="--kpi-color:var(--accent)">
+          <div class="kpi-label">Sessions</div>
+          <div class="kpi-value" id="kpi-sessions">—</div>
+          <div class="kpi-sub" id="kpi-sessions-sub"></div>
+        </div>
+        <div class="kpi-card" style="--kpi-color:var(--cyan)">
+          <div class="kpi-label">LLM Requests</div>
+          <div class="kpi-value" id="kpi-requests">—</div>
+          <div class="kpi-sub" id="kpi-requests-sub"></div>
+        </div>
+        <div class="kpi-card" style="--kpi-color:var(--green)">
+          <div class="kpi-label">Total Tokens</div>
+          <div class="kpi-value" id="kpi-tokens">—</div>
+          <div class="kpi-sub" id="kpi-tokens-sub"></div>
+        </div>
+        <div class="kpi-card" style="--kpi-color:var(--yellow)">
+          <div class="kpi-label">Tool Calls</div>
+          <div class="kpi-value" id="kpi-tools">—</div>
+          <div class="kpi-sub" id="kpi-tools-sub"></div>
+        </div>
+        <div class="kpi-card" style="--kpi-color:var(--orange)">
+          <div class="kpi-label">Avg TTFT</div>
+          <div class="kpi-value" id="kpi-ttft">—</div>
+          <div class="kpi-sub" id="kpi-ttft-sub"></div>
+        </div>
+      </div>
 
-    const $ = (sel) => document.querySelector(sel);
-    const sessionsPanel = $('#sessionsPanel');
-    const metaPanel = $('#metaPanel');
-    const agentsPanel = $('#agentsPanel');
-    const eventsPanel = $('#eventsPanel');
-    const detailPanel = $('#detailPanel');
-    const detailTitle = $('#detailTitle');
-    const sessionCount = $('#sessionCount');
-    const eventCount = $('#eventCount');
-    const typeFilter = $('#typeFilter');
-    const agentFilter = $('#agentFilter');
-    const statusBar = $('#statusBar');
+      <!-- Charts grid -->
+      <div class="charts-grid">
 
-    function loadScript(src) {
-      return new Promise((resolve, reject) => {
-        const existing = document.querySelector(`script[data-src="${src}"]`);
-        if (existing) {
-          if (existing.dataset.loaded === 'true') {
-            resolve();
-            return;
-          }
-          existing.addEventListener('load', () => resolve(), { once: true });
-          existing.addEventListener('error', () => reject(new Error(`加载脚本失败: ${src}`)), { once: true });
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = src;
-        script.async = true;
-        script.dataset.src = src;
-        script.onload = () => {
-          script.dataset.loaded = 'true';
-          resolve();
-        };
-        script.onerror = () => reject(new Error(`加载脚本失败: ${src}`));
-        document.head.appendChild(script);
+        <!-- Sessions / Requests timeline -->
+        <div class="chart-card wide">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div class="chart-title">Activity Timeline</div>
+              <div class="chart-subtitle">Sessions &amp; LLM requests over time</div>
+            </div>
+            <div class="range-btns" id="rangeSelector">
+              <button class="range-btn" data-range="7">7d</button>
+              <button class="range-btn" data-range="30">30d</button>
+              <button class="range-btn active" data-range="all">All</button>
+            </div>
+          </div>
+          <div class="chart-wrap" id="chart-timeline-wrap">
+            <canvas id="chart-timeline"></canvas>
+            <div class="chart-empty" id="chart-timeline-empty" style="display:none"></div>
+          </div>
+        </div>
+
+        <!-- Runtime distribution -->
+        <div class="chart-card">
+          <div class="chart-title">Runtime Distribution</div>
+          <div class="chart-wrap" id="chart-runtime-wrap">
+            <canvas id="chart-runtime"></canvas>
+            <div class="chart-empty" id="chart-runtime-empty" style="display:none"></div>
+          </div>
+        </div>
+
+        <!-- Token usage by model over time -->
+        <div class="chart-card wide">
+          <div class="chart-title">Token Usage by Model</div>
+          <div class="chart-subtitle">Daily total tokens per model (OpenCode LLM logs)</div>
+          <div id="chart-tokens-wrap" class="chart-wrap">
+            <canvas id="chart-tokens"></canvas>
+            <div class="chart-empty" id="chart-tokens-empty" style="display:none"></div>
+          </div>
+        </div>
+
+        <!-- Top tools -->
+        <div class="chart-card">
+          <div class="chart-title">Top Tool Calls</div>
+          <div id="chart-tools-wrap" class="chart-wrap tall">
+            <canvas id="chart-tools"></canvas>
+            <div class="chart-empty" id="chart-tools-empty" style="display:none"></div>
+          </div>
+        </div>
+
+        <!-- Model table -->
+        <div class="chart-card wide">
+          <div class="chart-title">Model Breakdown</div>
+          <div style="overflow:auto;flex:1">
+            <table class="model-table" id="modelTable">
+              <thead><tr>
+                <th>Model</th>
+                <th style="text-align:right">Requests</th>
+                <th style="text-align:right">Input Tok</th>
+                <th style="text-align:right">Output Tok</th>
+                <th style="text-align:right">Avg TTFT</th>
+                <th style="text-align:right">Sessions</th>
+              </tr></thead>
+              <tbody id="modelTableBody"><tr><td colspan="6" style="color:var(--muted);padding:16px 8px">加载 session 后显示</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Status bar ── -->
+  <div class="statusbar" id="statusBar">
+    <span id="sb-dot"><span class="status-dot"></span>ready</span>
+  </div>
+
+</div>
+
+<script src="./sql-wasm.js"></script>
+<script src="./chart.umd.min.js"></script>
+<script>
+/* ═══════════════════════════════════════
+   HappyTrace — App Logic
+   ═══════════════════════════════════════ */
+
+const DB_NAME = 'happytrace-db';
+const STORE = 'kv';
+const AUTO_REFRESH_MS = 5000;
+
+let autoRefreshTimer = null;
+let directoryHandle = null;
+let sqlJsPromise = null;
+let chartInstances = {};
+let analyticsRange = 'all';
+
+let state = {
+  data: { sessions: [] },
+  activeSessionId: null,
+  activeEventId: null,
+  activeAgent: '',
+  activeType: '',
+  search: '',
+  sourceMode: 'none',
+  lastLoadedAt: null,
+  activeView: 'sessions',
+  activeEventsTab: 'events'
+};
+
+/* ── DOM refs ── */
+const $ = sel => document.querySelector(sel);
+const sessionsPanel     = $('#sessionsPanel');
+const metaPanel         = $('#metaPanel');
+const agentsPanel       = $('#agentsPanel');
+const eventsPanel       = $('#eventsPanel');
+const sessionStatsPanel = $('#sessionStatsPanel');
+const detailPanel       = $('#detailPanel');
+const detailTitle       = $('#detailTitle');
+const sessionCount      = $('#sessionCount');
+const eventCount        = $('#eventCount');
+const typeFilter        = $('#typeFilter');
+const agentFilter       = $('#agentFilter');
+const statusBar         = $('#statusBar');
+
+/* ── View switching ── */
+function switchView(view) {
+  state.activeView = view;
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  $('#view-sessions').classList.toggle('hidden', view !== 'sessions');
+  $('#view-analytics').classList.toggle('hidden', view !== 'analytics');
+  if (view === 'analytics') renderAnalytics();
+}
+
+document.querySelectorAll('.nav-tab').forEach(btn => {
+  btn.addEventListener('click', () => switchView(btn.dataset.view));
+});
+
+/* ── Events sub-tab switching ── */
+function switchEventsTab(tab) {
+  state.activeEventsTab = tab;
+  document.querySelectorAll('.panel-subtab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  eventsPanel.style.display     = tab === 'events' ? '' : 'none';
+  sessionStatsPanel.style.display = tab === 'stats'  ? '' : 'none';
+  if (tab === 'stats') renderSessionStats();
+}
+
+document.getElementById('evtSubtabs').addEventListener('click', e => {
+  const btn = e.target.closest('.panel-subtab');
+  if (btn) switchEventsTab(btn.dataset.tab);
+});
+
+/* ── SQL.js (local) ── */
+async function loadSqlJsLibrary() {
+  if (!sqlJsPromise) {
+    sqlJsPromise = window.initSqlJs({ locateFile: f => `./${f}` });
+  }
+  return await sqlJsPromise;
+}
+
+/* ── IndexedDB helpers ── */
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror  = () => reject(req.error);
+  });
+}
+async function idbSet(key, value) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+async function idbGet(key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx  = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+/* ── Utilities ── */
+function escapeHtml(v) {
+  return String(v ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+function truncate(text, n = 150) {
+  const s = String(text ?? '');
+  return s.length > n ? s.slice(0, n) + '…' : s;
+}
+function safeJsonParse(text) { try { return JSON.parse(text); } catch { return null; } }
+function parseJsonl(text) {
+  return String(text||'').split(/\n+/).map(l=>l.trim()).filter(Boolean).map(l=>safeJsonParse(l)).filter(Boolean);
+}
+function sqlRowsToObjects(result) {
+  if (!result?.columns || !result?.values) return [];
+  return result.values.map(row => Object.fromEntries(result.columns.map((col,i)=>[col,row[i]])));
+}
+async function copyText(text) {
+  const value = String(text ?? '');
+  if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(value); return; }
+  const el = document.createElement('textarea');
+  el.value = value; el.setAttribute('readonly',''); el.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+}
+function currentSession() {
+  return state.data.sessions.find(s => s.id === state.activeSessionId) || state.data.sessions[0] || null;
+}
+function visibleEvents(session) {
+  if (!session) return [];
+  return session.events.filter(e => {
+    if (state.activeAgent && e.agent !== state.activeAgent) return false;
+    if (state.activeType  && e.type  !== state.activeType)  return false;
+    if (!state.search) return true;
+    const hay = [e.summary, e.tool, e.output, JSON.stringify(e.payload||{}), e.content||''].join('\n').toLowerCase();
+    return hay.includes(state.search.toLowerCase());
+  });
+}
+function guessDisplayName(s) { return s.display_name || s.title || s.id || 'session'; }
+function formatList(values) {
+  const items = Array.from(new Set((values||[]).filter(Boolean)));
+  return items.length ? items.join(', ') : '—';
+}
+function formatCount(v) { return Number.isFinite(v) ? String(v) : '—'; }
+function formatDurationCompact(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  const s = Math.round(ms/1000), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+function formatNum(n) {
+  if (!Number.isFinite(n)) return '—';
+  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return String(Math.round(n));
+}
+function collectModels(...lists) {
+  return Array.from(new Set(lists.flat().filter(Boolean).map(v=>String(v))));
+}
+function PathSafeBasename(p) {
+  const parts = String(p||'').split('/').filter(Boolean);
+  return parts[parts.length-1]||'';
+}
+function sumNumbers(arr) { return arr.reduce((a,b)=>a+(Number.isFinite(b)?b:0),0); }
+function toEpochMs(v) {
+  if (typeof v==='number'&&Number.isFinite(v)) return v;
+  if (typeof v!=='string'||!v) return null;
+  const ms = Date.parse(v); return Number.isNaN(ms)?null:ms;
+}
+function toIsoFromMs(ms) {
+  if (!ms) return ''; const d=new Date(Number(ms));
+  return Number.isNaN(d.getTime())?'':d.toISOString();
+}
+
+/* ── Time helpers ── */
+function inferTime(session, idx, explicitTimestamp='') {
+  if (explicitTimestamp) {
+    const d=new Date(explicitTimestamp);
+    if (!Number.isNaN(d.getTime())) return d.toTimeString().slice(0,8);
+  }
+  const start = session.session_start||session.started_at||session.last_updated||session.updated_at||'';
+  if (!start) return String(idx+1);
+  const d=new Date(start);
+  if (Number.isNaN(d.getTime())) return String(idx+1);
+  d.setSeconds(d.getSeconds()+idx);
+  return d.toTimeString().slice(0,8);
+}
+
+/* ── OpenCode helpers ── */
+function isOpenCodeDeepEvent(e) { return Boolean(e?.payload?.message||e?.payload?.part||e?.payload?.tool_state); }
+function isOpenCodeLlmEvent(e)  { return Boolean(e?.payload?.callID||e?.payload?.timestampMs||e?.type?.startsWith('LLM')); }
+
+function computeOpenCodeSessionStats(session, llmEntries=[]) {
+  const events=session?.events||[];
+  const deepEvents=events.filter(isOpenCodeDeepEvent);
+  const requestEntries=llmEntries.filter(e=>e?.type==='request');
+  const responseEntries=llmEntries.filter(e=>e?.type==='response');
+  const llmErrorEntries=llmEntries.filter(e=>e?.type==='error');
+  const firstTokenEntries=llmEntries.filter(e=>e?.type==='first_token');
+  const toolCalls=deepEvents.filter(e=>e.type==='ToolCall');
+  const toolResults=deepEvents.filter(e=>e.type==='ToolResult');
+  const toolErrors=toolResults.filter(e=>e.status==='error');
+  const totalErrorCount=events.filter(e=>e.status==='error'||e.type==='LLMError').length;
+  const wallMs=(()=>{
+    const started=toEpochMs(session?.started_at), ended=toEpochMs(session?.last_event_at);
+    return started!=null&&ended!=null&&ended>=started?(ended-started):null;
+  })();
+  const llmDurationMs=sumNumbers(responseEntries.map(e=>Number(e?.totalDuration)));
+  const llmTotalTokens=sumNumbers(responseEntries.map(e=>Number(e?.tokens?.total)));
+  // Fallback: sum tokens from StepFinish events (SQLite DB mode, no JSONL logs)
+  const stepFinishEvents=events.filter(e=>e.type==='StepFinish'||e.type==='StepFinishToolCalls');
+  const stepTotalTokens=sumNumbers(stepFinishEvents.map(e=>Number(e.payload?.part?.data?.tokens?.total||0)));
+  const totalTokens=llmTotalTokens||stepTotalTokens;
+  const avgTtftMs=firstTokenEntries.length?(sumNumbers(firstTokenEntries.map(e=>Number(e?.ttft)))/firstTokenEntries.length):null;
+  const modeCandidates=requestEntries.map(e=>e?.mode);
+  if (!modeCandidates.length) for (const msg of session?.raw?.messages||[]) if (msg?.data?.mode) modeCandidates.push(msg.data.mode);
+  const sourceKinds=[];
+  if (deepEvents.length) sourceKinds.push('deep');
+  if (llmEntries.length||events.some(isOpenCodeLlmEvent)) sourceKinds.push('llm');
+  return {
+    sourceKinds, llmRequests:requestEntries.length, llmResponses:responseEntries.length,
+    llmErrors:llmErrorEntries.length, toolCalls:toolCalls.length, toolResults:toolResults.length,
+    toolErrors:toolErrors.length, totalErrors:totalErrorCount,
+    agents:Array.from(new Set([...(session?.agents||[]),...requestEntries.map(e=>e?.agent).filter(Boolean)])),
+    modes:Array.from(new Set(modeCandidates.filter(Boolean))),
+    wallMs, llmDurationMs, totalTokens, avgTtftMs
+  };
+}
+
+/* ═══════════════════════════════════════
+   Normalizers
+   ═══════════════════════════════════════ */
+
+function normalizeClaudeContent(content) {
+  if (typeof content==='string') return [{type:'text',text:content}];
+  if (Array.isArray(content)) return content.filter(Boolean).map(item=>typeof item==='string'?{type:'text',text:item}:item);
+  return [];
+}
+function summarizeCodexContentBlocks(content) {
+  if (!Array.isArray(content)) return '';
+  return content.map(item=>item?.text||item?.content||'').filter(Boolean).join('\n\n');
+}
+function extractToolCalls(msg) {
+  return (msg.tool_calls||[]).map((tc,idx)=>{
+    const fn=tc.function||{};
+    return {localId:`${msg.__idx}-toolcall-${idx}`,tool_call_id:tc.call_id||tc.id||`${msg.__idx}-tc-${idx}`,name:fn.name||'unknown_tool',arguments:fn.arguments||''};
+  });
+}
+
+function mapHermesMessagesToEvents(rawSession) {
+  const messages=rawSession.messages||[], events=[], toolCallMap=new Map(); let eventId=1;
+  messages.forEach((msg,idx)=>{
+    msg.__idx=idx; const role=msg.role||'unknown';
+    if (role==='user') { events.push({id:eventId++,time:inferTime(rawSession,idx),agent:'user',type:'UserPromptSubmit',tool:'',status:'completed',summary:truncate(msg.content||'[empty]'),content:msg.content||'',payload:msg}); return; }
+    if (role==='assistant') {
+      const tcs=extractToolCalls(msg);
+      tcs.forEach(tc=>{ toolCallMap.set(tc.tool_call_id,tc); events.push({id:eventId++,time:inferTime(rawSession,idx),agent:'assistant',type:'AssistantToolCall',tool:tc.name,status:'completed',summary:truncate(tc.arguments||`[call] ${tc.name}`),content:msg.content||'',payload:{tool_call:tc,finish_reason:msg.finish_reason,raw_message:msg}}); });
+      if ((msg.content||'').trim()) { const isStop=msg.finish_reason==='stop'; events.push({id:eventId++,time:inferTime(rawSession,idx),agent:'assistant',type:isStop?'Stop':'AssistantMessage',tool:'',status:'completed',summary:truncate(msg.content||''),content:msg.content||'',payload:msg,output:msg.reasoning||''}); }
+      return;
+    }
+    if (role==='tool') {
+      const linked=toolCallMap.get(msg.tool_call_id||'')||{}, parsed=safeJsonParse(msg.content||'');
+      const summary=parsed?.output?truncate(parsed.output):truncate(msg.content||'');
+      events.push({id:eventId++,time:inferTime(rawSession,idx),agent:'tool',type:'ToolResult',tool:linked.name||'tool',status:parsed?.exit_code&&parsed.exit_code!==0?'error':'completed',summary,content:msg.content||'',payload:{linked_tool_call:linked,parsed,raw_message:msg},output:parsed?.output||msg.content||''});
+      return;
+    }
+    events.push({id:eventId++,time:inferTime(rawSession,idx),agent:role,type:'Unknown',tool:'',status:'completed',summary:truncate(msg.content||`[${role}]`),content:msg.content||'',payload:msg});
+  });
+  return events;
+}
+
+function normalizeHermesSession(raw, idx, indexMap={}) {
+  const sid=raw.session_id||raw.id||`hermes_session_${idx}`;
+  const meta=Object.values(indexMap).find(x=>x.session_id===sid)||{};
+  const events=mapHermesMessagesToEvents(raw);
+  const roles=Array.from(new Set(events.map(e=>e.agent).filter(Boolean)));
+  return {id:sid,title:raw.title||meta.display_name||meta.session_key||sid,project:raw.platform||meta.platform||'unknown',project_path:raw.cwd||raw.project_path||'',runtime:'Hermes',started_at:raw.session_start||raw.started_at||'',last_event_at:raw.last_updated||meta.updated_at||'',agents:roles,events,raw:{...raw,message_count:raw.message_count||raw.messages?.length||0},index_meta:meta};
+}
+
+function mapClaudeEntriesToEvents(lines, rawMeta={}) {
+  const events=[], toolUseMap=new Map(); let eventId=1;
+  lines.forEach((entry,idx)=>{
+    const kind=entry?.type||'unknown', time=inferTime(rawMeta,idx,entry.timestamp);
+    if (kind==='file-history-snapshot') { events.push({id:eventId++,time,agent:'session',type:'Snapshot',tool:'',status:'completed',summary:truncate(entry.snapshot?.messageId||'file-history-snapshot'),content:'',payload:entry}); return; }
+    if (kind==='queue-operation') { events.push({id:eventId++,time,agent:'session',type:entry.operation==='enqueue'?'QueueEnqueue':'QueueDequeue',tool:'',status:'completed',summary:truncate(entry.content||entry.operation||''),content:entry.content||'',payload:entry}); return; }
+    if (kind==='last-prompt') { events.push({id:eventId++,time,agent:'session',type:'LastPrompt',tool:'',status:'completed',summary:truncate(entry.lastPrompt||''),content:entry.lastPrompt||'',payload:entry}); return; }
+    if (kind==='permission-mode') { events.push({id:eventId++,time,agent:'session',type:'PermissionMode',tool:'',status:'completed',summary:truncate(entry.mode||entry.permissionMode||'permission mode'),content:'',payload:entry}); return; }
+    if (kind==='system') {
+      const subtype=entry.subtype||'system';
+      const mappedType=({stop_hook_summary:'StopHookSummary',local_command:'LocalCommand',turn_duration:'TurnDuration',api_error:'ApiError',compact_boundary:'CompactBoundary'})[subtype]||'SystemEvent';
+      events.push({id:eventId++,time,agent:'system',type:mappedType,tool:'',status:entry.level==='error'?'error':'completed',summary:truncate(entry.content||entry.error?.error?.message||subtype),content:entry.content||'',payload:entry,output:entry.error?JSON.stringify(entry.error,null,2):''});
+      return;
+    }
+    if (kind==='user'||kind==='assistant') {
+      const blocks=normalizeClaudeContent(entry.message?.content), role=entry.message?.role||kind;
+      const agent=kind==='assistant'?(entry.agentId?`assistant:${entry.agentId}`:'assistant'):'user';
+      if (kind==='assistant'&&!blocks.length) { events.push({id:eventId++,time,agent,type:'AssistantMessage',tool:'',status:'completed',summary:truncate('[empty assistant message]'),content:'',payload:entry}); return; }
+      if (kind==='user'&&!blocks.length) { events.push({id:eventId++,time,agent,type:'UserPromptSubmit',tool:'',status:'completed',summary:truncate('[empty user message]'),content:'',payload:entry}); return; }
+      let emittedMainText=false;
+      blocks.forEach(block=>{
+        const bt=block?.type||'text';
+        if (bt==='tool_use') { toolUseMap.set(block.id,block); events.push({id:eventId++,time,agent,type:'AssistantToolCall',tool:block.name||'tool',status:'completed',summary:truncate(JSON.stringify(block.input||{})),content:JSON.stringify(block.input||{},null,2),payload:{entry,block}}); return; }
+        if (bt==='tool_result') { const linked=toolUseMap.get(block.tool_use_id)||{}; const ct=typeof block.content==='string'?block.content:JSON.stringify(block.content||{},null,2); events.push({id:eventId++,time,agent:'tool',type:'ToolResult',tool:linked.name||'tool',status:block.is_error?'error':'completed',summary:truncate(ct),content:ct,payload:{entry,block,linked_tool_use:linked},output:ct}); return; }
+        if (bt==='thinking') { events.push({id:eventId++,time,agent,type:'Reasoning',tool:'',status:'completed',summary:truncate(block.thinking||''),content:block.thinking||'',payload:{entry,block}}); return; }
+        if (bt==='text') { const textContent=block.text||'', mappedType=kind==='user'?'UserPromptSubmit':'AssistantMessage'; if (!emittedMainText||textContent.trim()) { events.push({id:eventId++,time,agent,type:mappedType,tool:'',status:'completed',summary:truncate(textContent||`[${role}]`),content:textContent,payload:{entry,block}}); emittedMainText=true; } return; }
+        events.push({id:eventId++,time,agent,type:'Unknown',tool:'',status:'completed',summary:truncate(JSON.stringify(block)),content:'',payload:{entry,block}});
       });
+      return;
     }
+    events.push({id:eventId++,time,agent:kind,type:'Unknown',tool:'',status:'completed',summary:truncate(JSON.stringify(entry)),content:'',payload:entry});
+  });
+  return events;
+}
 
-    async function loadSqlJsLibrary() {
-      if (!sqlJsPromise) {
-        sqlJsPromise = (async () => {
-          if (!window.initSqlJs) {
-            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js');
-          }
-          return await window.initSqlJs({
-            locateFile: (file) => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/${file}`
-          });
-        })();
-      }
-      return await sqlJsPromise;
+function normalizeClaudeSession(lines, idx, pathInfo='', isSubagent=false, parentDir='') {
+  const first=lines[0]||{}, firstWithSession=lines.find(x=>x?.sessionId)||{};
+  const sessionId=first.sessionId||firstWithSession.sessionId||`claude_session_${idx}`;
+  const firstUserEntry=lines.find(x=>x?.type==='user');
+  const firstUserBlocks=normalizeClaudeContent(firstUserEntry?.message?.content);
+  const firstUserText=firstUserBlocks.map(b=>b?.text||'').filter(Boolean).join('\n\n');
+  const events=mapClaudeEntriesToEvents(lines,{session_start:first.timestamp||'',last_updated:lines.at(-1)?.timestamp||''});
+  const roles=Array.from(new Set(events.map(e=>e.agent).filter(Boolean)));
+  const runtimeSource=pathInfo.includes('/transcripts/')?'claude-transcript':'claude-project';
+  return {
+    id:sessionId,
+    title:truncate(firstUserText,80)||PathSafeBasename(pathInfo)||sessionId,
+    project:first.entrypoint||runtimeSource,
+    project_path:first.cwd||'',
+    runtime:'Claude',
+    is_subagent:isSubagent,
+    parent_dir:parentDir,
+    parent_session_id:null,   // filled in post-processing
+    subagent_ids:[],
+    started_at:first.timestamp||'',
+    last_event_at:lines.at(-1)?.timestamp||'',
+    agents:roles,
+    events,
+    raw:{sessionId,message_count:lines.length,lines,version:first.version||'',model:collectModels(...lines.map(l=>l?.message?.model))[0]||'',models:collectModels(...lines.map(l=>l?.message?.model))},
+    index_meta:{source_path:pathInfo}
+  };
+}
+
+function mapCodexLinesToEvents(lines, rawMeta={}) {
+  const events=[], toolCallMap=new Map(); let eventId=1;
+  lines.forEach((entry,idx)=>{
+    const kind=entry?.type||'unknown', payload=entry?.payload||{}, payloadType=payload?.type||'', time=inferTime(rawMeta,idx,entry.timestamp);
+    if (kind==='session_meta') { events.push({id:eventId++,time,agent:'session',type:'SessionStart',tool:'',status:'completed',summary:truncate(`${payload.originator||'codex'} @ ${payload.cwd||''}`),content:'',payload:entry}); return; }
+    if (kind==='turn_context') { events.push({id:eventId++,time,agent:'context',type:'ContextSnapshot',tool:'',status:'completed',summary:truncate(`${payload.model||'model?'} · ${payload.cwd||''}`),content:'',payload:entry}); return; }
+    if (kind==='event_msg'&&payloadType==='user_message') { events.push({id:eventId++,time,agent:'user',type:'UserPromptSubmit',tool:'',status:'completed',summary:truncate(payload.message||''),content:payload.message||'',payload:entry}); return; }
+    if (kind==='event_msg'&&payloadType==='agent_message') { events.push({id:eventId++,time,agent:'assistant',type:'AssistantMessage',tool:'',status:'completed',summary:truncate(payload.message||''),content:payload.message||'',payload:entry}); return; }
+    if (kind==='event_msg'&&payloadType==='agent_reasoning') { events.push({id:eventId++,time,agent:'assistant',type:'Reasoning',tool:'',status:'completed',summary:truncate(payload.text||''),content:payload.text||'',payload:entry}); return; }
+    if (kind==='event_msg'&&payloadType==='turn_aborted') { events.push({id:eventId++,time,agent:'session',type:'TurnAborted',tool:'',status:'error',summary:truncate(payload.reason||'turn aborted'),content:payload.reason||'',payload:entry}); return; }
+    if (kind==='event_msg'&&payloadType==='token_count') { events.push({id:eventId++,time,agent:'metrics',type:'TokenCount',tool:'',status:'completed',summary:truncate(JSON.stringify(payload.info||payload.rate_limits||{})),content:'',payload:entry}); return; }
+    if (kind==='response_item'&&payloadType==='function_call') { toolCallMap.set(payload.call_id,payload); events.push({id:eventId++,time,agent:'assistant',type:'AssistantToolCall',tool:payload.name||'tool',status:'completed',summary:truncate(payload.arguments||''),content:payload.arguments||'',payload:entry}); return; }
+    if (kind==='response_item'&&payloadType==='function_call_output') { const linked=toolCallMap.get(payload.call_id)||{}; const parsed=safeJsonParse(payload.output||''); const summary=truncate(parsed?.output||payload.output||''); const exitCode=parsed?.metadata?.exit_code; events.push({id:eventId++,time,agent:'tool',type:'ToolResult',tool:linked.name||'tool',status:exitCode&&exitCode!==0?'error':'completed',summary,content:payload.output||'',payload:{entry,linked_tool_call:linked,parsed},output:parsed?.output||payload.output||''}); return; }
+    if (kind==='response_item'&&payloadType==='reasoning') { const summary=truncate(payload.summary?.map?.(x=>x.text).filter(Boolean).join('\n\n')||'reasoning'); events.push({id:eventId++,time,agent:'assistant',type:'Reasoning',tool:'',status:'completed',summary,content:summary,payload:entry}); return; }
+    if (kind==='response_item'&&payloadType==='ghost_snapshot') { events.push({id:eventId++,time,agent:'session',type:'Snapshot',tool:'',status:'completed',summary:truncate(payload.ghost_commit?.id||'ghost snapshot'),content:'',payload:entry}); return; }
+    if (kind==='response_item'&&payloadType==='message') { const role=payload.role||'assistant'; const content=summarizeCodexContentBlocks(payload.content); const mappedType=role==='assistant'?'AssistantMessage':`${role.charAt(0).toUpperCase()}${role.slice(1)}Message`; events.push({id:eventId++,time,agent:role==='assistant'?'assistant':role,type:mappedType,tool:'',status:'completed',summary:truncate(content||`[${role}]`),content,payload:entry}); return; }
+    events.push({id:eventId++,time,agent:payloadType||kind,type:'Unknown',tool:'',status:'completed',summary:truncate(JSON.stringify(entry)),content:'',payload:entry});
+  });
+  return events;
+}
+
+function normalizeCodexSession(lines, idx, codexIndexMap={}, pathInfo='') {
+  const metaLine=lines.find(x=>x?.type==='session_meta')||{}, meta=metaLine.payload||{};
+  const sessionId=meta.id||`codex_session_${idx}`, indexMeta=codexIndexMap[sessionId]||{};
+  const turnContext=lines.find(x=>x?.type==='turn_context')?.payload||{};
+  const firstUser=lines.find(x=>x?.type==='event_msg'&&x?.payload?.type==='user_message')?.payload?.message||'';
+  const events=mapCodexLinesToEvents(lines,{session_start:meta.timestamp||lines[0]?.timestamp||'',last_updated:lines.at(-1)?.timestamp||'',updated_at:indexMeta.updated_at||''});
+  const roles=Array.from(new Set(events.map(e=>e.agent).filter(Boolean)));
+  const models=collectModels(turnContext.model,...lines.map(l=>l?.payload?.model),...lines.map(l=>l?.payload?.message?.model));
+  return {id:sessionId,title:indexMeta.thread_name||truncate(firstUser,80)||PathSafeBasename(pathInfo)||sessionId,project:meta.originator||meta.source||'codex',project_path:meta.cwd||turnContext.cwd||'',runtime:'Codex',started_at:meta.timestamp||lines[0]?.timestamp||'',last_event_at:lines.at(-1)?.timestamp||indexMeta.updated_at||'',agents:roles,events,raw:{...meta,model:models[0]||'',models,message_count:lines.length,lines},index_meta:indexMeta};
+}
+
+function mapOpenCodeExportedSessionToEvents(exported) {
+  const events=[]; let eventId=1;
+  for (const msg of exported.messages||[]) {
+    const meta=msg.data||{}, role=meta.role||'unknown', agent=meta.agent||role;
+    const time=inferTime({session_start:toIsoFromMs(msg.time_created)},eventId-1,toIsoFromMs(msg.time_created));
+    if (role==='user') {
+      const userText=(msg.parts||[]).map(p=>p.data).filter(p=>p&&p.type==='text').map(p=>p.text||'').join('\n\n')||'[user message]';
+      events.push({id:eventId++,time,raw_time:toIsoFromMs(msg.time_created),agent:'user',type:'UserPromptSubmit',tool:'',status:'completed',summary:truncate(userText),content:userText,payload:msg});
+      continue;
     }
-
-    function openDB() {
-      return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 1);
-        req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-    }
-    async function idbSet(key, value) {
-      const db = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readwrite');
-        tx.objectStore(STORE).put(value, key);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-    }
-    async function idbGet(key) {
-      const db = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readonly');
-        const req = tx.objectStore(STORE).get(key);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-    }
-
-    function currentSession() {
-      return state.data.sessions.find(s => s.id === state.activeSessionId) || state.data.sessions[0] || null;
-    }
-
-    function visibleEvents(session) {
-      if (!session) return [];
-      return session.events.filter(e => {
-        if (state.activeAgent && e.agent !== state.activeAgent) return false;
-        if (state.activeType && e.type !== state.activeType) return false;
-        if (!state.search) return true;
-        const hay = [e.summary, e.tool, e.output, JSON.stringify(e.payload || {}), e.content || ''].join('\n').toLowerCase();
-        return hay.includes(state.search.toLowerCase());
-      });
-    }
-
-    function escapeHtml(v) {
-      return String(v ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function truncate(text, n = 150) {
-      const s = String(text ?? '');
-      return s.length > n ? s.slice(0, n) + '…' : s;
-    }
-
-    function safeJsonParse(text) {
-      try { return JSON.parse(text); } catch { return null; }
-    }
-
-    async function copyText(text) {
-      const value = String(text ?? '');
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-        return;
-      }
-      const input = document.createElement('textarea');
-      input.value = value;
-      input.setAttribute('readonly', '');
-      input.style.position = 'fixed';
-      input.style.opacity = '0';
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
-    }
-
-    function sqlRowsToObjects(result) {
-      if (!result?.columns || !result?.values) return [];
-      return result.values.map(row => Object.fromEntries(result.columns.map((col, idx) => [col, row[idx]])));
-    }
-
-    function parseJsonl(text) {
-      return String(text || '').split(/\n+/).map(line => line.trim()).filter(Boolean).map(line => safeJsonParse(line)).filter(Boolean);
-    }
-
-    function guessDisplayName(session) {
-      return session.display_name || session.title || session.id || 'session';
-    }
-
-    function extractToolCalls(msg) {
-      const arr = msg.tool_calls || [];
-      return arr.map((tc, idx) => {
-        const fn = tc.function || {};
-        return {
-          localId: `${msg.__idx}-toolcall-${idx}`,
-          tool_call_id: tc.call_id || tc.id || `${msg.__idx}-tc-${idx}`,
-          name: fn.name || 'unknown_tool',
-          arguments: fn.arguments || ''
-        };
-      });
-    }
-
-    function inferTime(session, idx, explicitTimestamp = '') {
-      if (explicitTimestamp) {
-        const d = new Date(explicitTimestamp);
-        if (!Number.isNaN(d.getTime())) return d.toTimeString().slice(0, 8);
-      }
-      const start = session.session_start || session.started_at || session.last_updated || session.updated_at || '';
-      if (!start) return String(idx + 1);
-      const d = new Date(start);
-      if (Number.isNaN(d.getTime())) return String(idx + 1);
-      d.setSeconds(d.getSeconds() + idx);
-      return d.toTimeString().slice(0, 8);
-    }
-
-    function toEpochMs(value) {
-      if (typeof value === 'number' && Number.isFinite(value)) return value;
-      if (typeof value !== 'string' || !value) return null;
-      const ms = Date.parse(value);
-      return Number.isNaN(ms) ? null : ms;
-    }
-
-    function sumNumbers(values) {
-      return values.reduce((acc, value) => acc + (Number.isFinite(value) ? value : 0), 0);
-    }
-
-    function formatDurationCompact(ms) {
-      if (!Number.isFinite(ms) || ms < 0) return '-';
-      if (ms < 1000) return `${Math.round(ms)} ms`;
-      const totalSeconds = Math.round(ms / 1000);
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-      if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
-      if (minutes > 0) return `${minutes}m ${seconds}s`;
-      return `${seconds}s`;
-    }
-
-    function formatCount(value) {
-      return Number.isFinite(value) ? String(value) : '-';
-    }
-
-    function formatList(values) {
-      const items = Array.from(new Set((values || []).filter(Boolean)));
-      return items.length ? items.join(', ') : '-';
-    }
-
-    function collectModels(...valueLists) {
-      return Array.from(new Set(valueLists.flat().filter(Boolean).map(value => String(value))));
-    }
-
-    function isOpenCodeDeepEvent(event) {
-      return Boolean(event?.payload?.message || event?.payload?.part || event?.payload?.tool_state);
-    }
-
-    function isOpenCodeLlmEvent(event) {
-      return Boolean(event?.payload?.callID || event?.payload?.timestampMs || event?.type?.startsWith('LLM'));
-    }
-
-    function computeOpenCodeSessionStats(session, llmEntries = []) {
-      const events = session?.events || [];
-      const deepEvents = events.filter(isOpenCodeDeepEvent);
-      const requestEntries = llmEntries.filter(entry => entry?.type === 'request');
-      const responseEntries = llmEntries.filter(entry => entry?.type === 'response');
-      const llmErrorEntries = llmEntries.filter(entry => entry?.type === 'error');
-      const firstTokenEntries = llmEntries.filter(entry => entry?.type === 'first_token');
-      const toolCalls = deepEvents.filter(event => event.type === 'ToolCall');
-      const toolResults = deepEvents.filter(event => event.type === 'ToolResult');
-      const toolErrors = toolResults.filter(event => event.status === 'error');
-      const totalErrorCount = events.filter(event => event.status === 'error' || event.type === 'LLMError').length;
-      const wallMs = (() => {
-        const started = toEpochMs(session?.started_at);
-        const ended = toEpochMs(session?.last_event_at);
-        return started != null && ended != null && ended >= started ? (ended - started) : null;
-      })();
-      const llmDurationMs = sumNumbers(responseEntries.map(entry => Number(entry?.totalDuration)));
-      const totalTokens = sumNumbers(responseEntries.map(entry => Number(entry?.tokens?.total)));
-      const avgTtftMs = firstTokenEntries.length ? (sumNumbers(firstTokenEntries.map(entry => Number(entry?.ttft))) / firstTokenEntries.length) : null;
-      const modeCandidates = requestEntries.map(entry => entry?.mode);
-      if (!modeCandidates.length) {
-        for (const msg of session?.raw?.messages || []) {
-          if (msg?.data?.mode) modeCandidates.push(msg.data.mode);
-        }
-      }
-      const sourceKinds = [];
-      if (deepEvents.length) sourceKinds.push('deep');
-      if (llmEntries.length || events.some(isOpenCodeLlmEvent)) sourceKinds.push('llm');
-      return {
-        sourceKinds,
-        llmRequests: requestEntries.length,
-        llmResponses: responseEntries.length,
-        llmErrors: llmErrorEntries.length,
-        toolCalls: toolCalls.length,
-        toolResults: toolResults.length,
-        toolErrors: toolErrors.length,
-        totalErrors: totalErrorCount,
-        agents: Array.from(new Set([...(session?.agents || []), ...requestEntries.map(entry => entry?.agent).filter(Boolean)])),
-        modes: Array.from(new Set(modeCandidates.filter(Boolean))),
-        wallMs,
-        llmDurationMs,
-        totalTokens,
-        avgTtftMs
-      };
-    }
-
-    function summarizeCodexContentBlocks(content) {
-      if (!Array.isArray(content)) return '';
-      return content.map(item => item?.text || item?.content || '').filter(Boolean).join('\n\n');
-    }
-
-    function mapHermesMessagesToEvents(rawSession) {
-      const messages = rawSession.messages || [];
-      const events = [];
-      const toolCallMap = new Map();
-      let eventId = 1;
-
-      messages.forEach((msg, idx) => {
-        msg.__idx = idx;
-        const role = msg.role || 'unknown';
-
-        if (role === 'user') {
-          events.push({
-            id: eventId++,
-            time: inferTime(rawSession, idx),
-            agent: 'user',
-            type: 'UserPromptSubmit',
-            tool: '',
-            status: 'completed',
-            summary: truncate(msg.content || '[empty user message]'),
-            content: msg.content || '',
-            payload: msg
-          });
-          return;
-        }
-
-        if (role === 'assistant') {
-          const toolCalls = extractToolCalls(msg);
-          if (toolCalls.length) {
-            toolCalls.forEach((tc) => {
-              toolCallMap.set(tc.tool_call_id, tc);
-              events.push({
-                id: eventId++,
-                time: inferTime(rawSession, idx),
-                agent: 'assistant',
-                type: 'AssistantToolCall',
-                tool: tc.name,
-                status: 'completed',
-                summary: truncate(tc.arguments || `[call] ${tc.name}`),
-                content: msg.content || '',
-                payload: { tool_call: tc, finish_reason: msg.finish_reason, raw_message: msg }
-              });
-            });
-          }
-          if ((msg.content || '').trim()) {
-            const isStop = msg.finish_reason === 'stop';
-            events.push({
-              id: eventId++,
-              time: inferTime(rawSession, idx),
-              agent: 'assistant',
-              type: isStop ? 'Stop' : 'AssistantMessage',
-              tool: '',
-              status: 'completed',
-              summary: truncate(msg.content || ''),
-              content: msg.content || '',
-              payload: msg,
-              output: msg.reasoning || ''
-            });
-          }
-          return;
-        }
-
-        if (role === 'tool') {
-          const linked = toolCallMap.get(msg.tool_call_id || '') || {};
-          const parsed = safeJsonParse(msg.content || '');
-          const summary = parsed?.output ? truncate(parsed.output) : truncate(msg.content || '');
-          events.push({
-            id: eventId++,
-            time: inferTime(rawSession, idx),
-            agent: 'tool',
-            type: 'ToolResult',
-            tool: linked.name || 'tool',
-            status: parsed?.exit_code && parsed.exit_code !== 0 ? 'error' : 'completed',
-            summary,
-            content: msg.content || '',
-            payload: { linked_tool_call: linked, parsed, raw_message: msg },
-            output: parsed?.output || msg.content || ''
-          });
-          return;
-        }
-
-        events.push({
-          id: eventId++,
-          time: inferTime(rawSession, idx),
-          agent: role,
-          type: 'Unknown',
-          tool: '',
-          status: 'completed',
-          summary: truncate(msg.content || `[${role}]`),
-          content: msg.content || '',
-          payload: msg
-        });
-      });
-
-      return events;
-    }
-
-    function mapCodexLinesToEvents(lines, rawMeta = {}) {
-      const events = [];
-      const toolCallMap = new Map();
-      let eventId = 1;
-
-      lines.forEach((entry, idx) => {
-        const kind = entry?.type || 'unknown';
-        const payload = entry?.payload || {};
-        const payloadType = payload?.type || '';
-        const time = inferTime(rawMeta, idx, entry.timestamp);
-
-        if (kind === 'session_meta') {
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'session',
-            type: 'SessionStart',
-            tool: '',
-            status: 'completed',
-            summary: truncate(`${payload.originator || 'codex'} @ ${payload.cwd || ''}`),
-            content: '',
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'turn_context') {
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'context',
-            type: 'ContextSnapshot',
-            tool: '',
-            status: 'completed',
-            summary: truncate(`${payload.model || 'model?'} · ${payload.cwd || ''}`),
-            content: '',
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'event_msg' && payloadType === 'user_message') {
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'user',
-            type: 'UserPromptSubmit',
-            tool: '',
-            status: 'completed',
-            summary: truncate(payload.message || ''),
-            content: payload.message || '',
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'event_msg' && payloadType === 'agent_message') {
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'assistant',
-            type: 'AssistantMessage',
-            tool: '',
-            status: 'completed',
-            summary: truncate(payload.message || ''),
-            content: payload.message || '',
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'event_msg' && payloadType === 'agent_reasoning') {
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'assistant',
-            type: 'Reasoning',
-            tool: '',
-            status: 'completed',
-            summary: truncate(payload.text || ''),
-            content: payload.text || '',
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'event_msg' && payloadType === 'turn_aborted') {
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'session',
-            type: 'TurnAborted',
-            tool: '',
-            status: 'error',
-            summary: truncate(payload.reason || 'turn aborted'),
-            content: payload.reason || '',
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'event_msg' && payloadType === 'token_count') {
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'metrics',
-            type: 'TokenCount',
-            tool: '',
-            status: 'completed',
-            summary: truncate(JSON.stringify(payload.info || payload.rate_limits || {})),
-            content: '',
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'response_item' && payloadType === 'function_call') {
-          toolCallMap.set(payload.call_id, payload);
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'assistant',
-            type: 'AssistantToolCall',
-            tool: payload.name || 'tool',
-            status: 'completed',
-            summary: truncate(payload.arguments || ''),
-            content: payload.arguments || '',
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'response_item' && payloadType === 'function_call_output') {
-          const linked = toolCallMap.get(payload.call_id) || {};
-          const parsed = safeJsonParse(payload.output || '');
-          const summary = truncate(parsed?.output || payload.output || '');
-          const exitCode = parsed?.metadata?.exit_code;
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'tool',
-            type: 'ToolResult',
-            tool: linked.name || 'tool',
-            status: exitCode && exitCode !== 0 ? 'error' : 'completed',
-            summary,
-            content: payload.output || '',
-            payload: { entry, linked_tool_call: linked, parsed },
-            output: parsed?.output || payload.output || ''
-          });
-          return;
-        }
-
-        if (kind === 'response_item' && payloadType === 'reasoning') {
-          const summary = truncate(payload.summary?.map?.(x => x.text).filter(Boolean).join('\n\n') || 'reasoning');
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'assistant',
-            type: 'Reasoning',
-            tool: '',
-            status: 'completed',
-            summary,
-            content: summary,
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'response_item' && payloadType === 'ghost_snapshot') {
-          events.push({
-            id: eventId++,
-            time,
-            agent: 'session',
-            type: 'Snapshot',
-            tool: '',
-            status: 'completed',
-            summary: truncate(payload.ghost_commit?.id || 'ghost snapshot'),
-            content: '',
-            payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'response_item' && payloadType === 'message') {
-          const role = payload.role || 'assistant';
-          const content = summarizeCodexContentBlocks(payload.content);
-          const mappedType = role === 'assistant' ? 'AssistantMessage' : `${role.charAt(0).toUpperCase()}${role.slice(1)}Message`;
-          const mappedAgent = role === 'assistant' ? 'assistant' : role;
-          events.push({
-            id: eventId++,
-            time,
-            agent: mappedAgent,
-            type: mappedType,
-            tool: '',
-            status: 'completed',
-            summary: truncate(content || `[${role}]`),
-            content,
-            payload: entry
-          });
-          return;
-        }
-
-        events.push({
-          id: eventId++,
-          time,
-          agent: payloadType || kind,
-          type: 'Unknown',
-          tool: '',
-          status: 'completed',
-          summary: truncate(JSON.stringify(entry)),
-          content: '',
-          payload: entry
-        });
-      });
-
-      return events;
-    }
-
-    function normalizeHermesSession(rawSession, sessionIndex, sessionIndexMap = {}) {
-      const sessionId = rawSession.session_id || rawSession.id || `hermes_session_${sessionIndex}`;
-      const sessionMeta = Object.values(sessionIndexMap).find(x => x.session_id === sessionId) || {};
-      const events = mapHermesMessagesToEvents(rawSession);
-      const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
-      return {
-        id: sessionId,
-        title: rawSession.title || sessionMeta.display_name || sessionMeta.session_key || sessionId,
-        project: rawSession.platform || sessionMeta.platform || 'unknown',
-        project_path: rawSession.cwd || rawSession.project_path || '',
-        runtime: 'Hermes',
-        started_at: rawSession.session_start || rawSession.started_at || '',
-        last_event_at: rawSession.last_updated || sessionMeta.updated_at || '',
-        agents: roles,
-        events,
-        raw: { ...rawSession, message_count: rawSession.message_count || rawSession.messages?.length || 0 },
-        index_meta: sessionMeta
-      };
-    }
-
-    function normalizeClaudeContent(content) {
-      if (typeof content === 'string') return [{ type: 'text', text: content }];
-      if (Array.isArray(content)) return content.filter(Boolean).map(item => typeof item === 'string' ? { type: 'text', text: item } : item);
-      return [];
-    }
-
-    function mapClaudeEntriesToEvents(lines, rawMeta = {}) {
-      const events = [];
-      const toolUseMap = new Map();
-      let eventId = 1;
-
-      lines.forEach((entry, idx) => {
-        const kind = entry?.type || 'unknown';
-        const time = inferTime(rawMeta, idx, entry.timestamp);
-
-        if (kind === 'file-history-snapshot') {
-          events.push({
-            id: eventId++, time, agent: 'session', type: 'Snapshot', tool: '', status: 'completed',
-            summary: truncate(entry.snapshot?.messageId || 'file-history-snapshot'), content: '', payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'queue-operation') {
-          events.push({
-            id: eventId++, time, agent: 'session', type: entry.operation === 'enqueue' ? 'QueueEnqueue' : 'QueueDequeue', tool: '', status: 'completed',
-            summary: truncate(entry.content || entry.operation || ''), content: entry.content || '', payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'last-prompt') {
-          events.push({
-            id: eventId++, time, agent: 'session', type: 'LastPrompt', tool: '', status: 'completed',
-            summary: truncate(entry.lastPrompt || ''), content: entry.lastPrompt || '', payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'permission-mode') {
-          events.push({
-            id: eventId++, time, agent: 'session', type: 'PermissionMode', tool: '', status: 'completed',
-            summary: truncate(entry.mode || entry.permissionMode || 'permission mode'), content: '', payload: entry
-          });
-          return;
-        }
-
-        if (kind === 'system') {
-          const subtype = entry.subtype || 'system';
-          const mappedType = ({
-            stop_hook_summary: 'StopHookSummary',
-            local_command: 'LocalCommand',
-            turn_duration: 'TurnDuration',
-            api_error: 'ApiError',
-            compact_boundary: 'CompactBoundary'
-          })[subtype] || 'SystemEvent';
-          const summary = truncate(entry.content || entry.error?.error?.message || subtype);
-          events.push({
-            id: eventId++, time, agent: 'system', type: mappedType, tool: '', status: entry.level === 'error' ? 'error' : 'completed',
-            summary, content: entry.content || '', payload: entry,
-            output: entry.error ? JSON.stringify(entry.error, null, 2) : ''
-          });
-          return;
-        }
-
-        if (kind === 'user' || kind === 'assistant') {
-          const blocks = normalizeClaudeContent(entry.message?.content);
-          const role = entry.message?.role || kind;
-          const agent = kind === 'assistant' ? (entry.agentId ? `assistant:${entry.agentId}` : 'assistant') : 'user';
-
-          if (kind === 'assistant' && !blocks.length) {
-            events.push({
-              id: eventId++, time, agent, type: 'AssistantMessage', tool: '', status: 'completed',
-              summary: truncate('[empty assistant message]'), content: '', payload: entry
-            });
-            return;
-          }
-
-          if (kind === 'user' && !blocks.length) {
-            events.push({
-              id: eventId++, time, agent, type: 'UserPromptSubmit', tool: '', status: 'completed',
-              summary: truncate('[empty user message]'), content: '', payload: entry
-            });
-            return;
-          }
-
-          let emittedMainText = false;
-          blocks.forEach((block) => {
-            const blockType = block?.type || 'text';
-            if (blockType === 'tool_use') {
-              toolUseMap.set(block.id, block);
-              events.push({
-                id: eventId++, time, agent, type: 'AssistantToolCall', tool: block.name || 'tool', status: 'completed',
-                summary: truncate(JSON.stringify(block.input || {})), content: JSON.stringify(block.input || {}, null, 2), payload: { entry, block }
-              });
-              return;
-            }
-            if (blockType === 'tool_result') {
-              const linked = toolUseMap.get(block.tool_use_id) || {};
-              const contentText = typeof block.content === 'string' ? block.content : JSON.stringify(block.content || {}, null, 2);
-              events.push({
-                id: eventId++, time, agent: 'tool', type: 'ToolResult', tool: linked.name || 'tool', status: block.is_error ? 'error' : 'completed',
-                summary: truncate(contentText), content: contentText, payload: { entry, block, linked_tool_use: linked }, output: contentText
-              });
-              return;
-            }
-            if (blockType === 'thinking') {
-              events.push({
-                id: eventId++, time, agent, type: 'Reasoning', tool: '', status: 'completed',
-                summary: truncate(block.thinking || ''), content: block.thinking || '', payload: { entry, block }
-              });
-              return;
-            }
-            if (blockType === 'text') {
-              const textContent = block.text || '';
-              const mappedType = kind === 'user' ? 'UserPromptSubmit' : 'AssistantMessage';
-              if (!emittedMainText || textContent.trim()) {
-                events.push({
-                  id: eventId++, time, agent, type: mappedType, tool: '', status: 'completed',
-                  summary: truncate(textContent || `[${role}]`), content: textContent, payload: { entry, block }
-                });
-                emittedMainText = true
-              }
-              return;
-            }
-            events.push({
-              id: eventId++, time, agent, type: 'Unknown', tool: '', status: 'completed',
-              summary: truncate(JSON.stringify(block)), content: '', payload: { entry, block }
-            });
-          });
-          return;
-        }
-
-        events.push({
-          id: eventId++, time, agent: kind, type: 'Unknown', tool: '', status: 'completed',
-          summary: truncate(JSON.stringify(entry)), content: '', payload: entry
-        });
-      });
-
-      return events;
-    }
-
-    function toIsoFromMs(ms) {
-      if (!ms) return '';
-      const d = new Date(Number(ms));
-      return Number.isNaN(d.getTime()) ? '' : d.toISOString();
-    }
-
-    function mapOpenCodeExportedSessionToEvents(exported) {
-      const events = [];
-      let eventId = 1;
-      const messages = exported.messages || [];
-      for (const msg of messages) {
-        const meta = msg.data || {};
-        const role = meta.role || 'unknown';
-        const agent = meta.agent || role;
-        const time = inferTime({ session_start: toIsoFromMs(msg.time_created) }, eventId - 1, toIsoFromMs(msg.time_created));
-
-        if (role === 'user') {
-          const userTextParts = (msg.parts || []).map(p => p.data).filter(p => p && p.type === 'text').map(p => p.text || '');
-          const userText = userTextParts.join('\n\n') || '[user message]';
-          events.push({
-            id: eventId++, time, raw_time: toIsoFromMs(msg.time_created), agent: 'user', type: 'UserPromptSubmit', tool: '', status: 'completed',
-            summary: truncate(userText), content: userText, payload: msg
-          });
+    if (role==='assistant') {
+      for (const part of msg.parts||[]) {
+        const p=part.data||{}, pTime=inferTime({session_start:toIsoFromMs(part.time_created)},eventId-1,toIsoFromMs(part.time_created));
+        if (p.type==='step-start') { events.push({id:eventId++,time:pTime,raw_time:toIsoFromMs(part.time_created),agent,type:'StepStart',tool:'',status:'completed',summary:truncate(p.snapshot||'step-start'),content:'',payload:{message:msg,part}}); continue; }
+        if (p.type==='step-finish') { events.push({id:eventId++,time:pTime,raw_time:toIsoFromMs(part.time_created),agent,type:p.reason==='tool-calls'?'StepFinishToolCalls':'StepFinish',tool:'',status:'completed',summary:truncate(`reason=${p.reason||'-'} · total=${p.tokens?.total??'-'}`),content:'',payload:{message:msg,part},output:JSON.stringify(p.tokens||{},null,2)}); continue; }
+        if (p.type==='text') { events.push({id:eventId++,time:pTime,raw_time:toIsoFromMs(part.time_created),agent,type:'AssistantMessage',tool:'',status:'completed',summary:truncate(p.text||''),content:p.text||'',payload:{message:msg,part}}); continue; }
+        if (p.type==='reasoning') { events.push({id:eventId++,time:pTime,raw_time:toIsoFromMs(part.time_created),agent,type:'Reasoning',tool:'',status:'completed',summary:truncate(p.text||'[reasoning]'),content:p.text||'',payload:{message:msg,part}}); continue; }
+        if (p.type==='tool') {
+          const state=p.state||{}, inputText=typeof state.input==='string'?state.input:JSON.stringify(state.input||{},null,2);
+          const output=typeof state.output==='string'?state.output:JSON.stringify(state.output||{},null,2);
+          const durationMs=state.time?.start&&state.time?.end?(state.time.end-state.time.start):null;
+          events.push({id:eventId++,time:pTime,raw_time:toIsoFromMs(part.time_created),agent,type:'ToolCall',tool:p.tool||'',status:'completed',summary:truncate(`${p.tool||'tool'} · ${state.title||state.status||'call'}`),content:inputText,payload:{message:msg,part,tool_state:state,duration_ms:durationMs},output:''});
+          events.push({id:eventId++,time:pTime,raw_time:toIsoFromMs(part.time_created),agent:'tool',type:'ToolResult',tool:p.tool||'',status:state.status==='error'?'error':'completed',summary:truncate(`${p.tool||'tool'} · ${state.status||'completed'}${durationMs!=null?` · ${durationMs}ms`:''}`),content:inputText,payload:{message:msg,part,tool_state:state,duration_ms:durationMs},output});
           continue;
         }
+        events.push({id:eventId++,time:pTime,agent,type:'Unknown',tool:'',status:'completed',summary:truncate(JSON.stringify(p)),content:'',payload:{message:msg,part}});
+      }
+      continue;
+    }
+  }
+  return events;
+}
 
-        if (role === 'assistant') {
-          for (const part of msg.parts || []) {
-            const p = part.data || {};
-            const pTime = inferTime({ session_start: toIsoFromMs(part.time_created) }, eventId - 1, toIsoFromMs(part.time_created));
-            if (p.type === 'step-start') {
-              events.push({ id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: 'StepStart', tool: '', status: 'completed', summary: truncate(p.snapshot || 'step-start'), content: '', payload: { message: msg, part } });
-              continue;
-            }
-            if (p.type === 'step-finish') {
-              events.push({ id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: p.reason === 'tool-calls' ? 'StepFinishToolCalls' : 'StepFinish', tool: '', status: 'completed', summary: truncate(`reason=${p.reason || '-'} · total=${p.tokens?.total ?? '-'}`), content: '', payload: { message: msg, part }, output: JSON.stringify(p.tokens || {}, null, 2) });
-              continue;
-            }
-            if (p.type === 'text') {
-              events.push({ id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: 'AssistantMessage', tool: '', status: 'completed', summary: truncate(p.text || ''), content: p.text || '', payload: { message: msg, part } });
-              continue;
-            }
-            if (p.type === 'reasoning') {
-              events.push({ id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: 'Reasoning', tool: '', status: 'completed', summary: truncate(p.text || '[reasoning]'), content: p.text || '', payload: { message: msg, part } });
-              continue;
-            }
-            if (p.type === 'tool') {
-              const state = p.state || {};
-              const inputText = typeof state.input === 'string' ? state.input : JSON.stringify(state.input || {}, null, 2);
-              const output = typeof state.output === 'string' ? state.output : JSON.stringify(state.output || {}, null, 2);
-              const durationMs = state.time?.start && state.time?.end ? (state.time.end - state.time.start) : null;
-              events.push({
-                id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent, type: 'ToolCall', tool: p.tool || '', status: 'completed',
-                summary: truncate(`${p.tool || 'tool'} · ${state.title || state.status || 'call'}`),
-                content: inputText,
-                payload: { message: msg, part, tool_state: state, duration_ms: durationMs },
-                output: ''
-              });
-              events.push({
-                id: eventId++, time: pTime, raw_time: toIsoFromMs(part.time_created), agent: 'tool', type: 'ToolResult', tool: p.tool || '', status: state.status === 'error' ? 'error' : 'completed',
-                summary: truncate(`${p.tool || 'tool'} · ${state.status || 'completed'}${durationMs != null ? ` · ${durationMs}ms` : ''}`),
-                content: inputText,
-                payload: { message: msg, part, tool_state: state, duration_ms: durationMs },
-                output
-              });
-              continue;
-            }
-            events.push({ id: eventId++, time: pTime, agent, type: 'Unknown', tool: '', status: 'completed', summary: truncate(JSON.stringify(p)), content: '', payload: { message: msg, part } });
+function mergeEventsByTime(...eventLists) {
+  return eventLists.flat().filter(Boolean).sort((a,b)=>{
+    const ta=a.sort_time||a.raw_time||a.time||'', tb=b.sort_time||b.raw_time||b.time||'';
+    return String(ta).localeCompare(String(tb));
+  }).map((e,i)=>({...e,id:i+1}));
+}
+
+function mapOpenCodeLogEntriesToEvents(lines, rawMeta={}) {
+  const events=[]; let eventId=1;
+  for (const entry of lines) {
+    const time=inferTime(rawMeta,eventId-1,entry.timestamp), type=entry.type||'unknown';
+    if (type==='request') { events.push({id:eventId++,time,agent:entry.agent||'agent',type:'LLMRequest',tool:entry.modelID||'',status:'completed',summary:truncate(`${entry.providerID||''} / ${entry.modelID||''} · mode=${entry.mode||''} · messages=${entry.messageCount||0} · tools=${entry.toolCount||0}`),content:'',payload:entry}); continue; }
+    if (type==='first_token') { events.push({id:eventId++,time,agent:entry.agent||'agent',type:'FirstToken',tool:'',status:'completed',summary:truncate(`ttft=${entry.ttft??'-'}ms`),content:'',payload:entry}); continue; }
+    if (type==='response') { events.push({id:eventId++,time,agent:entry.agent||'agent',type:entry.finishReason==='tool-calls'?'LLMResponseToolCalls':'LLMResponse',tool:entry.modelID||'',status:'completed',summary:truncate(`finish=${entry.finishReason||'-'} · total=${entry.tokens?.total??'-'} · out=${entry.tokens?.output??'-'} · duration=${entry.totalDuration??'-'}ms`),content:'',payload:entry,output:JSON.stringify(entry.tokens||{},null,2)}); continue; }
+    if (type==='error') { events.push({id:eventId++,time,agent:entry.agent||'agent',type:'LLMError',tool:'',status:'error',summary:truncate(entry.error||'error'),content:entry.error||'',payload:entry}); continue; }
+    events.push({id:eventId++,time,agent:entry.agent||'agent',type:'Unknown',tool:'',status:'completed',summary:truncate(JSON.stringify(entry)),content:'',payload:entry});
+  }
+  return events;
+}
+
+function normalizeOpenCodeExportedSession(exported, idx=0, llmEntries=[]) {
+  const sess=exported.session||{};
+  const deepEvents=mapOpenCodeExportedSessionToEvents(exported).map(e=>({...e,sort_time:e.time}));
+  const llmEvents=mapOpenCodeLogEntriesToEvents(llmEntries,{session_start:llmEntries[0]?.timestamp||toIsoFromMs(sess.time_created),last_updated:llmEntries.at(-1)?.timestamp||toIsoFromMs(sess.time_updated)}).map(e=>({...e,sort_time:e.payload?.timestamp||e.time}));
+  const events=mergeEventsByTime(deepEvents,llmEvents);
+  const roles=Array.from(new Set(events.map(e=>e.agent).filter(Boolean)));
+  const models=collectModels(...(exported.messages||[]).map(m=>m?.data?.modelID),...llmEntries.map(e=>e?.modelID));
+  const raw={...exported,llm_logs:llmEntries,message_count:exported.messages?.length||0,model:models[0]||'',models};
+  const session={id:sess.id||`opencode_export_${idx}`,title:sess.title||sess.id||`opencode_export_${idx}`,project:sess.project_id||'opencode',project_path:sess.directory||'',runtime:'OpenCode',started_at:llmEntries[0]?.timestamp||toIsoFromMs(sess.time_created),last_event_at:llmEntries.at(-1)?.timestamp||toIsoFromMs(sess.time_updated),agents:roles,events,raw,index_meta:{slug:sess.slug||'',source_path:llmEntries.length?'happytrace-export+llm-logs':'happytrace-export'}};
+  return {...session,opencode_stats:computeOpenCodeSessionStats(session,llmEntries)};
+}
+
+function normalizeOpenCodeSession(sessionID, entries, sessionMeta={}) {
+  const first=entries[0]||{}, last=entries.at(-1)||{};
+  const events=mapOpenCodeLogEntriesToEvents(entries,{session_start:first.timestamp||'',last_updated:last.timestamp||''});
+  const roles=Array.from(new Set(events.map(e=>e.agent).filter(Boolean)));
+  const models=collectModels(...entries.map(e=>e?.modelID));
+  const raw={...sessionMeta,message_count:entries.length,lines:entries,model:models[0]||'',models};
+  const session={id:sessionID,title:sessionMeta.title||sessionID,project:sessionMeta.projectID||'opencode',project_path:sessionMeta.directory||'',runtime:'OpenCode',started_at:first.timestamp||'',last_event_at:last.timestamp||'',agents:roles,events,raw,index_meta:{slug:sessionMeta.slug||'',source_path:'llm-logs'}};
+  return {...session,opencode_stats:computeOpenCodeSessionStats(session,entries)};
+}
+
+function sortSessions(sessions) {
+  return sessions.sort((a,b)=>String(b.started_at||b.last_event_at||'').localeCompare(String(a.started_at||a.last_event_at||'')));
+}
+
+/* ═══════════════════════════════════════
+   File loading
+   ═══════════════════════════════════════ */
+
+async function collectFilesFromDirectoryHandle(handle, prefix='') {
+  const files=[];
+  for await (const [name,entry] of handle.entries()) {
+    const nextPath=prefix?`${prefix}/${name}`:name;
+    if (entry.kind==='file') files.push({name,path:nextPath,handle:entry});
+    if (entry.kind==='directory') files.push(...await collectFilesFromDirectoryHandle(entry,nextPath));
+  }
+  return files;
+}
+async function loadTextFromCollectedFile(fileRecord) {
+  if (fileRecord.handle) return await (await fileRecord.handle.getFile()).text();
+  if (fileRecord.file)   return await fileRecord.file.text();
+  return '';
+}
+
+async function loadUnifiedSessions(files) {
+  const sessions=[];
+  let hermesIndex={};
+  const codexIndex={}, opencodeSessionMeta={}, opencodeLogEntries={}, opencodeExportedSessions=[];
+
+  for (const file of files) {
+    if ((file.name==='sessions.json'&&/(^|\/)\.hermes\//.test('/'+file.path))||file.name==='sessions.json') {
+      const parsed=safeJsonParse(await loadTextFromCollectedFile(file));
+      if (parsed&&typeof parsed==='object') hermesIndex=parsed;
+    }
+    if (file.name==='session_index.jsonl') {
+      const lines=parseJsonl(await loadTextFromCollectedFile(file));
+      for (const line of lines) codexIndex[line.id]=line;
+    }
+    if (file.path.includes('/storage/session/global/')&&file.name.endsWith('.json')) {
+      const parsed=safeJsonParse(await loadTextFromCollectedFile(file));
+      if (parsed?.id) opencodeSessionMeta[parsed.id]=parsed;
+    }
+    if (file.name.startsWith('opencode-session-')&&file.name.endsWith('.json')) {
+      const parsed=safeJsonParse(await loadTextFromCollectedFile(file));
+      if (parsed?.happytrace_format==='opencode-session-v1') opencodeExportedSessions.push(parsed);
+    }
+    if (file.path.includes('/llm-logs/')&&file.name.endsWith('.jsonl')) {
+      const lines=parseJsonl(await loadTextFromCollectedFile(file));
+      for (const line of lines) {
+        if (!line?.sessionID) continue;
+        if (!opencodeLogEntries[line.sessionID]) opencodeLogEntries[line.sessionID]=[];
+        opencodeLogEntries[line.sessionID].push(line);
+      }
+    }
+  }
+
+  let hermesCount=0, codexCount=0, claudeCount=0, opencodeCount=0;
+  for (const file of files) {
+    if (/^session_.*\.json$/i.test(file.name)&&file.name!=='sessions.json') {
+      const parsed=safeJsonParse(await loadTextFromCollectedFile(file));
+      if (parsed?.messages) sessions.push(normalizeHermesSession(parsed,hermesCount++,hermesIndex));
+      continue;
+    }
+    if (file.name.endsWith('.jsonl')&&file.name!=='session_index.jsonl'&&/rollout-|sessions\//.test(file.path)) {
+      const lines=parseJsonl(await loadTextFromCollectedFile(file));
+      if (lines[0]?.type==='session_meta') { sessions.push(normalizeCodexSession(lines,codexCount++,codexIndex,file.path)); continue; }
+    }
+    if (file.name.endsWith('.jsonl')&&(/\.claude\/transcripts\//.test('/'+file.path)||/\.claude\/projects\//.test('/'+file.path))) {
+      if (file.name==='skill-injections.jsonl') continue;
+      const lines=parseJsonl(await loadTextFromCollectedFile(file));
+      if (lines[0]?.type==='user'||lines[0]?.type==='assistant'||lines[0]?.type==='file-history-snapshot') {
+        const isSubagent=file.path.includes('/subagents/');
+        const parentDir=isSubagent?file.path.split('/subagents/')[0]:'';
+        sessions.push(normalizeClaudeSession(lines,claudeCount++,file.path,isSubagent,parentDir));
+      }
+    }
+  }
+
+  const exportedOpenCodeIDs=new Set();
+  for (const exported of opencodeExportedSessions) {
+    const sessionID=exported?.session?.id;
+    const llmEntries=sessionID?(opencodeLogEntries[sessionID]||[]).sort((a,b)=>(a.timestampMs||0)-(b.timestampMs||0)):[];
+    sessions.push(normalizeOpenCodeExportedSession(exported,opencodeCount++,llmEntries));
+    if (sessionID) exportedOpenCodeIDs.add(sessionID);
+  }
+  for (const [sessionID,entries] of Object.entries(opencodeLogEntries)) {
+    if (exportedOpenCodeIDs.has(sessionID)) continue;
+    entries.sort((a,b)=>(a.timestampMs||0)-(b.timestampMs||0));
+    sessions.push(normalizeOpenCodeSession(sessionID,entries,opencodeSessionMeta[sessionID]||{}));
+    opencodeCount++;
+  }
+
+  /* ── Link sub-agents to parent sessions ── */
+  const sessionByPath={};
+  for (const s of sessions) {
+    const p=s.index_meta?.source_path||'';
+    if (!s.is_subagent&&p) sessionByPath[p]=s;
+  }
+  for (const s of sessions) {
+    if (!s.is_subagent||!s.parent_dir) continue;
+    // find parent: any non-subagent session whose source_path starts with parent_dir
+    const parent=Object.values(sessionByPath).find(p=>
+      (p.index_meta?.source_path||'').startsWith(s.parent_dir)
+    );
+    if (parent) {
+      s.parent_session_id=parent.id;
+      if (!parent.subagent_ids) parent.subagent_ids=[];
+      parent.subagent_ids.push(s.id);
+    }
+  }
+
+  return {sessions:sortSessions(sessions)};
+}
+
+async function loadFromDirectoryHandle(handle) {
+  return await loadUnifiedSessions(await collectFilesFromDirectoryHandle(handle));
+}
+async function loadFromFileList(fileList) {
+  return await loadUnifiedSessions(Array.from(fileList||[]).map(f=>({name:f.name,path:f.webkitRelativePath||f.name,file:f})));
+}
+
+function reconstructOpenCodeExportsFromDb(sqlDb) {
+  const sessionRows=sqlRowsToObjects(sqlDb.exec(`select id,slug,project_id,directory,title,version,time_created,time_updated from session order by time_updated desc`)[0]);
+  const messageRows=sqlRowsToObjects(sqlDb.exec(`select session_id,id,time_created,time_updated,data from message order by time_created asc,id asc`)[0]);
+  const partRows=sqlRowsToObjects(sqlDb.exec(`select session_id,message_id,time_created,time_updated,data from part order by time_created asc,id asc`)[0]);
+  const messagesBySession=new Map(), partsByMessage=new Map();
+  for (const row of messageRows) {
+    const parsed=safeJsonParse(row.data), list=messagesBySession.get(row.session_id)||[];
+    list.push({id:row.id,time_created:row.time_created,time_updated:row.time_updated,data:parsed??row.data,parts:[]});
+    messagesBySession.set(row.session_id,list);
+  }
+  for (const row of partRows) {
+    const parsed=safeJsonParse(row.data), list=partsByMessage.get(row.message_id)||[];
+    list.push({time_created:row.time_created,time_updated:row.time_updated,data:parsed??row.data});
+    partsByMessage.set(row.message_id,list);
+  }
+  return sessionRows.map(sess=>({
+    happytrace_format:'opencode-session-v1',runtime:'OpenCode',
+    session:{id:sess.id,slug:sess.slug,project_id:sess.project_id,directory:sess.directory,title:sess.title,version:sess.version,time_created:sess.time_created,time_updated:sess.time_updated},
+    messages:(messagesBySession.get(sess.id)||[]).map(m=>({...m,parts:partsByMessage.get(m.id)||[]}))
+  }));
+}
+
+async function loadFromOpenCodeDbFile(file) {
+  const SQL=await loadSqlJsLibrary();
+  const buffer=await file.arrayBuffer();
+  const db=new SQL.Database(new Uint8Array(buffer));
+  try {
+    const exportedSessions=reconstructOpenCodeExportsFromDb(db);
+    const sessions=exportedSessions.map((exported,idx)=>normalizeOpenCodeExportedSession(exported,idx,[]));
+    sessions.sort((a,b)=>(toEpochMs(b.last_event_at)||0)-(toEpochMs(a.last_event_at)||0));
+    return {sessions};
+  } finally { db.close(); }
+}
+
+/* ═══════════════════════════════════════
+   Analytics — Data aggregation
+   ═══════════════════════════════════════ */
+
+const CHART_COLORS = ['#6ea8fe','#3ddc97','#ffd166','#c792ea','#5edfff','#ff9f43','#ff6b6b','#a5b4fc','#34d399','#fb923c','#f472b6','#818cf8'];
+const RUNTIME_COLORS = {OpenCode:'#6ea8fe',Claude:'#ff9f43',Hermes:'#c792ea',Codex:'#3ddc97'};
+
+function buildAnalyticsData(sessions, range='all') {
+  const cutoff = (() => {
+    if (range==='all') return null;
+    const d=new Date(); d.setDate(d.getDate()-Number(range)); return d;
+  })();
+
+  const byDay={}, byModel={}, toolUsage={}, byRuntime={}, tokenByModelByDay={};
+  let totalSessions=0, totalRequests=0, totalTokens=0, totalTools=0;
+  const allTtfts=[];
+
+  for (const session of sessions) {
+    const sessionDate = session.started_at ? new Date(session.started_at) : null;
+    if (cutoff && sessionDate && sessionDate < cutoff) continue;
+
+    totalSessions++;
+    const runtime=session.runtime||'Unknown';
+    byRuntime[runtime]=(byRuntime[runtime]||0)+1;
+    const sessionDay=(session.started_at||'').slice(0,10)||'';
+
+    if (sessionDay) {
+      if (!byDay[sessionDay]) byDay[sessionDay]={sessions:0,requests:0,tokens:0,tools:0};
+      byDay[sessionDay].sessions++;
+    }
+
+    // Determine which token source to use for this session
+    const sessionEvents=session.events||[];
+    const hasLlmResponseEvents=sessionEvents.some(e=>e.type==='LLMResponse'||e.type==='LLMResponseToolCalls');
+
+    // From events
+    for (const event of sessionEvents) {
+      const p=event.payload||{};
+      const eventDay=(event.raw_time||session.started_at||'').slice(0,10)||sessionDay;
+
+      if (event.type==='LLMResponse'||event.type==='LLMResponseToolCalls') {
+        const model=p.modelID||p.model||'unknown';
+        const tokens=p.tokens||{};
+        const inTok=Number(tokens.input||tokens.prompt||0);
+        const outTok=Number(tokens.output||tokens.completion||0);
+        const totTok=Number(tokens.total||0)||(inTok+outTok);
+
+        if (!byModel[model]) byModel[model]={requests:0,totalTokens:0,inputTokens:0,outputTokens:0,ttftSamples:[],sessions:new Set()};
+        byModel[model].requests++;
+        byModel[model].totalTokens+=totTok;
+        byModel[model].inputTokens+=inTok;
+        byModel[model].outputTokens+=outTok;
+        byModel[model].sessions.add(session.id);
+        totalRequests++; totalTokens+=totTok;
+
+        if (eventDay) {
+          if (!byDay[eventDay]) byDay[eventDay]={sessions:0,requests:0,tokens:0,tools:0};
+          byDay[eventDay].requests++;
+          byDay[eventDay].tokens+=totTok;
+          if (!tokenByModelByDay[model]) tokenByModelByDay[model]={};
+          tokenByModelByDay[model][eventDay]=(tokenByModelByDay[model][eventDay]||0)+totTok;
+        }
+      }
+
+      if (event.type==='FirstToken') {
+        const model=p.modelID||p.model||'unknown';
+        const ttft=Number(p.ttft||0);
+        if (ttft>0) {
+          if (!byModel[model]) byModel[model]={requests:0,totalTokens:0,inputTokens:0,outputTokens:0,ttftSamples:[],sessions:new Set()};
+          byModel[model].ttftSamples.push(ttft);
+          allTtfts.push(ttft);
+        }
+      }
+
+      // StepFinish / StepFinishToolCalls — token source when no LLM JSONL logs (SQLite DB mode)
+      if (!hasLlmResponseEvents&&(event.type==='StepFinish'||event.type==='StepFinishToolCalls')) {
+        const pd=event.payload?.part?.data||{};
+        const tokens=pd.tokens||{};
+        const totTok=Number(tokens.total||0);
+        const inTok=Number(tokens.input||0);
+        const outTok=Number(tokens.output||0);
+        if (totTok>0) {
+          // Use model from parent message or session fallback
+          const model=event.payload?.message?.data?.modelID||session.raw?.model||session.raw?.models?.[0]||'unknown';
+          if (!byModel[model]) byModel[model]={requests:0,totalTokens:0,inputTokens:0,outputTokens:0,cacheReadTokens:0,cacheWriteTokens:0,ttftSamples:[],sessions:new Set()};
+          byModel[model].requests++;
+          byModel[model].totalTokens+=totTok;
+          byModel[model].inputTokens+=inTok;
+          byModel[model].outputTokens+=outTok;
+          byModel[model].cacheReadTokens+=Number(tokens.cache?.read||0);
+          byModel[model].cacheWriteTokens+=Number(tokens.cache?.write||0);
+          byModel[model].sessions.add(session.id);
+          totalRequests++; totalTokens+=totTok;
+          if (eventDay) {
+            if (!byDay[eventDay]) byDay[eventDay]={sessions:0,requests:0,tokens:0,tools:0};
+            byDay[eventDay].requests++;
+            byDay[eventDay].tokens+=totTok;
+            if (!tokenByModelByDay[model]) tokenByModelByDay[model]={};
+            tokenByModelByDay[model][eventDay]=(tokenByModelByDay[model][eventDay]||0)+totTok;
           }
-          continue;
-        }
-      }
-      return events;
-    }
-
-    function mergeEventsByTime(...eventLists) {
-      const merged = eventLists.flat().filter(Boolean).sort((a, b) => {
-        const ta = a.sort_time || a.raw_time || a.time || '';
-        const tb = b.sort_time || b.raw_time || b.time || '';
-        return String(ta).localeCompare(String(tb));
-      });
-      return merged.map((event, idx) => ({ ...event, id: idx + 1 }));
-    }
-
-    function normalizeOpenCodeExportedSession(exported, sessionIndex = 0, llmEntries = []) {
-      const sess = exported.session || {};
-      const deepEvents = mapOpenCodeExportedSessionToEvents(exported).map(e => ({ ...e, sort_time: e.time }));
-      const llmEvents = mapOpenCodeLogEntriesToEvents(llmEntries, {
-        session_start: llmEntries[0]?.timestamp || toIsoFromMs(sess.time_created),
-        last_updated: llmEntries.at(-1)?.timestamp || toIsoFromMs(sess.time_updated)
-      }).map(e => ({ ...e, sort_time: e.payload?.timestamp || e.time }));
-      const events = mergeEventsByTime(deepEvents, llmEvents);
-      const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
-      const models = collectModels(
-        ...(exported.messages || []).map(message => message?.data?.modelID),
-        ...llmEntries.map(entry => entry?.modelID)
-      );
-      const raw = { ...exported, llm_logs: llmEntries, message_count: exported.messages?.length || 0, model: models[0] || '', models };
-      const index_meta = { slug: sess.slug || '', source_path: llmEntries.length ? 'happytrace-export+llm-logs' : 'happytrace-export' };
-      const session = {
-        id: sess.id || `opencode_export_${sessionIndex}`,
-        title: sess.title || sess.id || `opencode_export_${sessionIndex}`,
-        project: sess.project_id || 'opencode',
-        project_path: sess.directory || '',
-        runtime: 'OpenCode',
-        started_at: llmEntries[0]?.timestamp || toIsoFromMs(sess.time_created),
-        last_event_at: llmEntries.at(-1)?.timestamp || toIsoFromMs(sess.time_updated),
-        agents: roles,
-        events,
-        raw,
-        index_meta
-      };
-      return {
-        ...session,
-        opencode_stats: computeOpenCodeSessionStats(session, llmEntries)
-      };
-    }
-
-    function mapOpenCodeLogEntriesToEvents(lines, rawMeta = {}) {
-      const events = [];
-      let eventId = 1;
-      for (const entry of lines) {
-        const time = inferTime(rawMeta, eventId - 1, entry.timestamp);
-        const type = entry.type || 'unknown';
-        if (type === 'request') {
-          events.push({
-            id: eventId++, time, agent: entry.agent || 'agent', type: 'LLMRequest', tool: entry.modelID || '', status: 'completed',
-            summary: truncate(`${entry.providerID || ''} / ${entry.modelID || ''} · mode=${entry.mode || ''} · messages=${entry.messageCount || 0} · tools=${entry.toolCount || 0}`),
-            content: '', payload: entry
-          });
-          continue;
-        }
-        if (type === 'first_token') {
-          events.push({
-            id: eventId++, time, agent: entry.agent || 'agent', type: 'FirstToken', tool: '', status: 'completed',
-            summary: truncate(`ttft=${entry.ttft ?? '-'}ms`), content: '', payload: entry
-          });
-          continue;
-        }
-        if (type === 'response') {
-          events.push({
-            id: eventId++, time, agent: entry.agent || 'agent', type: entry.finishReason === 'tool-calls' ? 'LLMResponseToolCalls' : 'LLMResponse', tool: entry.modelID || '', status: 'completed',
-            summary: truncate(`finish=${entry.finishReason || '-'} · total=${entry.tokens?.total ?? '-'} · out=${entry.tokens?.output ?? '-'} · duration=${entry.totalDuration ?? '-'}ms`),
-            content: '', payload: entry,
-            output: JSON.stringify(entry.tokens || {}, null, 2)
-          });
-          continue;
-        }
-        if (type === 'error') {
-          events.push({
-            id: eventId++, time, agent: entry.agent || 'agent', type: 'LLMError', tool: '', status: 'error',
-            summary: truncate(entry.error || 'error'), content: entry.error || '', payload: entry
-          });
-          continue;
-        }
-        events.push({
-          id: eventId++, time, agent: entry.agent || 'agent', type: 'Unknown', tool: '', status: 'completed',
-          summary: truncate(JSON.stringify(entry)), content: '', payload: entry
-        });
-      }
-      return events;
-    }
-
-    function normalizeOpenCodeSession(sessionID, entries, sessionMeta = {}) {
-      const first = entries[0] || {};
-      const last = entries.at(-1) || {};
-      const events = mapOpenCodeLogEntriesToEvents(entries, { session_start: first.timestamp || '', last_updated: last.timestamp || '' });
-      const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
-      const models = collectModels(...entries.map(entry => entry?.modelID));
-      const raw = { ...sessionMeta, message_count: entries.length, lines: entries, model: models[0] || '', models };
-      const index_meta = { slug: sessionMeta.slug || '', source_path: 'llm-logs' };
-      const session = {
-        id: sessionID,
-        title: sessionMeta.title || sessionID,
-        project: sessionMeta.projectID || 'opencode',
-        project_path: sessionMeta.directory || '',
-        runtime: 'OpenCode',
-        started_at: first.timestamp || '',
-        last_event_at: last.timestamp || '',
-        agents: roles,
-        events,
-        raw,
-        index_meta
-      };
-      return {
-        ...session,
-        opencode_stats: computeOpenCodeSessionStats(session, entries)
-      };
-    }
-
-    function normalizeClaudeSession(lines, sessionIndex, pathInfo = '') {
-      const first = lines[0] || {};
-      const firstWithSession = lines.find(x => x?.sessionId) || {};
-      const sessionId = first.sessionId || firstWithSession.sessionId || `claude_session_${sessionIndex}`;
-      const firstUserEntry = lines.find(x => x?.type === 'user');
-      const firstUserBlocks = normalizeClaudeContent(firstUserEntry?.message?.content);
-      const firstUserText = firstUserBlocks.map(b => b?.text || '').filter(Boolean).join('\n\n');
-      const events = mapClaudeEntriesToEvents(lines, {
-        session_start: first.timestamp || '',
-        last_updated: lines.at(-1)?.timestamp || ''
-      });
-      const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
-      const runtimeSource = pathInfo.includes('/transcripts/') ? 'claude-transcript' : 'claude-project';
-      return {
-        id: sessionId,
-        title: truncate(firstUserText, 80) || PathSafeBasename(pathInfo) || sessionId,
-        project: first.entrypoint || runtimeSource,
-        project_path: first.cwd || '',
-        runtime: 'Claude',
-        started_at: first.timestamp || '',
-        last_event_at: lines.at(-1)?.timestamp || '',
-        agents: roles,
-        events,
-        raw: { sessionId, message_count: lines.length, lines, version: first.version || '', model: collectModels(...lines.map(line => line?.message?.model))[0] || '', models: collectModels(...lines.map(line => line?.message?.model)) },
-        index_meta: { source_path: pathInfo }
-      };
-    }
-
-    function normalizeCodexSession(lines, sessionIndex, codexIndexMap = {}, pathInfo = '') {
-      const metaLine = lines.find(x => x?.type === 'session_meta') || {};
-      const meta = metaLine.payload || {};
-      const sessionId = meta.id || `codex_session_${sessionIndex}`;
-      const indexMeta = codexIndexMap[sessionId] || {};
-      const turnContext = lines.find(x => x?.type === 'turn_context')?.payload || {};
-      const firstUser = lines.find(x => x?.type === 'event_msg' && x?.payload?.type === 'user_message')?.payload?.message || '';
-      const events = mapCodexLinesToEvents(lines, { session_start: meta.timestamp || lines[0]?.timestamp || '', last_updated: lines.at(-1)?.timestamp || '', updated_at: indexMeta.updated_at || '' });
-      const roles = Array.from(new Set(events.map(e => e.agent).filter(Boolean)));
-      const models = collectModels(turnContext.model, ...lines.map(line => line?.payload?.model), ...lines.map(line => line?.payload?.message?.model));
-      return {
-        id: sessionId,
-        title: indexMeta.thread_name || truncate(firstUser, 80) || PathSafeBasename(pathInfo) || sessionId,
-        project: meta.originator || meta.source || 'codex',
-        project_path: meta.cwd || turnContext.cwd || '',
-        runtime: 'Codex',
-        started_at: meta.timestamp || lines[0]?.timestamp || '',
-        last_event_at: lines.at(-1)?.timestamp || indexMeta.updated_at || '',
-        agents: roles,
-        events,
-        raw: { ...meta, model: models[0] || '', models, message_count: lines.length, lines },
-        index_meta: indexMeta
-      };
-    }
-
-    function PathSafeBasename(pathText) {
-      const parts = String(pathText || '').split('/').filter(Boolean);
-      return parts[parts.length - 1] || '';
-    }
-
-    function sortSessions(sessions) {
-      return sessions.sort((a, b) => String(b.started_at || b.last_event_at || '').localeCompare(String(a.started_at || a.last_event_at || '')));
-    }
-
-    async function collectFilesFromDirectoryHandle(handle, prefix = '') {
-      const files = [];
-      for await (const [name, entry] of handle.entries()) {
-        const nextPath = prefix ? `${prefix}/${name}` : name;
-        if (entry.kind === 'file') files.push({ name, path: nextPath, handle: entry });
-        if (entry.kind === 'directory') files.push(...await collectFilesFromDirectoryHandle(entry, nextPath));
-      }
-      return files;
-    }
-
-    async function loadTextFromCollectedFile(fileRecord) {
-      if (fileRecord.handle) return await (await fileRecord.handle.getFile()).text();
-      if (fileRecord.file) return await fileRecord.file.text();
-      return '';
-    }
-
-    async function loadUnifiedSessions(files) {
-      const sessions = [];
-      let hermesIndex = {};
-      const codexIndex = {};
-      const opencodeSessionMeta = {};
-      const opencodeLogEntries = {};
-      const opencodeExportedSessions = [];
-
-      for (const file of files) {
-        if (file.name === 'sessions.json' && /(^|\/)\.hermes\//.test('/' + file.path) || file.name === 'sessions.json') {
-          const parsed = safeJsonParse(await loadTextFromCollectedFile(file));
-          if (parsed && typeof parsed === 'object') hermesIndex = parsed;
-        }
-        if (file.name === 'session_index.jsonl') {
-          const lines = parseJsonl(await loadTextFromCollectedFile(file));
-          for (const line of lines) codexIndex[line.id] = line;
-        }
-        if (file.path.includes('/storage/session/global/') && file.name.endsWith('.json')) {
-          const parsed = safeJsonParse(await loadTextFromCollectedFile(file));
-          if (parsed?.id) opencodeSessionMeta[parsed.id] = parsed;
-        }
-        if (file.name.startsWith('opencode-session-') && file.name.endsWith('.json')) {
-          const parsed = safeJsonParse(await loadTextFromCollectedFile(file));
-          if (parsed?.happytrace_format === 'opencode-session-v1') opencodeExportedSessions.push(parsed);
-        }
-        if (file.path.includes('/llm-logs/') && file.name.endsWith('.jsonl')) {
-          const lines = parseJsonl(await loadTextFromCollectedFile(file));
-          for (const line of lines) {
-            if (!line?.sessionID) continue;
-            if (!opencodeLogEntries[line.sessionID]) opencodeLogEntries[line.sessionID] = [];
-            opencodeLogEntries[line.sessionID].push(line);
-          }
         }
       }
 
-      let hermesCount = 0;
-      let codexCount = 0;
-      let claudeCount = 0;
-      let opencodeCount = 0;
-      for (const file of files) {
-        if (/^session_.*\.json$/i.test(file.name) && file.name !== 'sessions.json') {
-          const parsed = safeJsonParse(await loadTextFromCollectedFile(file));
-          if (parsed?.messages) sessions.push(normalizeHermesSession(parsed, hermesCount++, hermesIndex));
-          continue;
-        }
-        if (file.name.endsWith('.jsonl') && file.name !== 'session_index.jsonl' && /rollout-|sessions\//.test(file.path)) {
-          const lines = parseJsonl(await loadTextFromCollectedFile(file));
-          if (lines[0]?.type === 'session_meta') {
-            sessions.push(normalizeCodexSession(lines, codexCount++, codexIndex, file.path));
-            continue;
-          }
-        }
-        if (file.name.endsWith('.jsonl') && (/\.claude\/transcripts\//.test('/' + file.path) || /\.claude\/projects\//.test('/' + file.path))) {
-          if (file.path.includes('/subagents/')) continue;
-          if (file.name === 'skill-injections.jsonl') continue;
-          const lines = parseJsonl(await loadTextFromCollectedFile(file));
-          if (lines[0]?.type === 'user' || lines[0]?.type === 'assistant' || lines[0]?.type === 'file-history-snapshot') {
-            sessions.push(normalizeClaudeSession(lines, claudeCount++, file.path));
-          }
+      if (event.type==='AssistantToolCall'||event.type==='ToolCall') {
+        const toolName=event.tool||'unknown';
+        if (!toolUsage[toolName]) toolUsage[toolName]={calls:0,errors:0};
+        toolUsage[toolName].calls++;
+        totalTools++;
+        if (eventDay) {
+          if (!byDay[eventDay]) byDay[eventDay]={sessions:0,requests:0,tokens:0,tools:0};
+          byDay[eventDay].tools++;
         }
       }
-
-      const exportedOpenCodeIDs = new Set();
-      for (const exported of opencodeExportedSessions) {
-        const sessionID = exported?.session?.id;
-        const llmEntries = sessionID ? (opencodeLogEntries[sessionID] || []).sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0)) : [];
-        sessions.push(normalizeOpenCodeExportedSession(exported, opencodeCount++, llmEntries));
-        if (sessionID) exportedOpenCodeIDs.add(sessionID);
+      if (event.type==='ToolResult'&&event.status==='error') {
+        const toolName=event.tool||'unknown';
+        if (!toolUsage[toolName]) toolUsage[toolName]={calls:0,errors:0};
+        toolUsage[toolName].errors++;
       }
-      for (const [sessionID, entries] of Object.entries(opencodeLogEntries)) {
-        if (exportedOpenCodeIDs.has(sessionID)) continue;
-        entries.sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0));
-        sessions.push(normalizeOpenCodeSession(sessionID, entries, opencodeSessionMeta[sessionID] || {}));
-        opencodeCount++;
-      }
-
-      return { sessions: sortSessions(sessions) };
     }
 
-    async function loadFromDirectoryHandle(handle) {
-      const files = await collectFilesFromDirectoryHandle(handle);
-      return await loadUnifiedSessions(files);
+    // Fallback: opencode_stats aggregate (when no granular events)
+    const stats=session.opencode_stats;
+    if (stats&&!(session.events||[]).some(e=>e.type==='LLMResponse'||e.type==='LLMResponseToolCalls')) {
+      if (sessionDay) {
+        if (!byDay[sessionDay]) byDay[sessionDay]={sessions:0,requests:0,tokens:0,tools:0};
+        byDay[sessionDay].requests+=stats.llmRequests||0;
+        byDay[sessionDay].tokens+=stats.totalTokens||0;
+        byDay[sessionDay].tools+=stats.toolCalls||0;
+      }
+      totalRequests+=stats.llmRequests||0;
+      totalTokens+=stats.totalTokens||0;
+      totalTools+=stats.toolCalls||0;
     }
 
-    async function loadFromFileList(fileList) {
-      const files = Array.from(fileList || []).map(file => ({
-        name: file.name,
-        path: file.webkitRelativePath || file.name,
-        file
-      }));
-      return await loadUnifiedSessions(files);
+    // Register models from session metadata
+    for (const model of session.raw?.models||[]) {
+      if (model&&!byModel[model]) byModel[model]={requests:0,totalTokens:0,inputTokens:0,outputTokens:0,ttftSamples:[],sessions:new Set()};
     }
+  }
 
-    function reconstructOpenCodeExportsFromDb(sqlDb) {
-      const sessionRows = sqlRowsToObjects(sqlDb.exec(`
-        select id, slug, project_id, directory, title, version, time_created, time_updated
-        from session
-        order by time_updated desc
-      `)[0]);
-      const messageRows = sqlRowsToObjects(sqlDb.exec(`
-        select session_id, id, time_created, time_updated, data
-        from message
-        order by time_created asc, id asc
-      `)[0]);
-      const partRows = sqlRowsToObjects(sqlDb.exec(`
-        select session_id, message_id, time_created, time_updated, data
-        from part
-        order by time_created asc, id asc
-      `)[0]);
+  // Finalize byModel
+  for (const [,m] of Object.entries(byModel)) {
+    m.sessionCount=m.sessions.size; delete m.sessions;
+    m.avgTtft=m.ttftSamples.length?m.ttftSamples.reduce((a,b)=>a+b,0)/m.ttftSamples.length:0;
+  }
+  const avgTtft=allTtfts.length?allTtfts.reduce((a,b)=>a+b,0)/allTtfts.length:0;
+  const sortedDays=Object.keys(byDay).filter(Boolean).sort();
 
-      const messagesBySession = new Map();
-      const partsByMessage = new Map();
+  return {totalSessions,totalRequests,totalTokens,totalTools,avgTtft,byDay:sortedDays.map(d=>({day:d,...byDay[d]})),byModel,toolUsage,byRuntime,tokenByModelByDay};
+}
 
-      for (const row of messageRows) {
-        const parsed = safeJsonParse(row.data);
-        const list = messagesBySession.get(row.session_id) || [];
-        list.push({
-          id: row.id,
-          time_created: row.time_created,
-          time_updated: row.time_updated,
-          data: parsed ?? row.data,
-          parts: []
-        });
-        messagesBySession.set(row.session_id, list);
-      }
+/* ═══════════════════════════════════════
+   Analytics — Chart rendering
+   ═══════════════════════════════════════ */
 
-      for (const row of partRows) {
-        const parsed = safeJsonParse(row.data);
-        const list = partsByMessage.get(row.message_id) || [];
-        list.push({
-          time_created: row.time_created,
-          time_updated: row.time_updated,
-          data: parsed ?? row.data
-        });
-        partsByMessage.set(row.message_id, list);
-      }
+function chartDefaults() {
+  return {
+    plugins:{
+      legend:{labels:{color:'#8b97b3',font:{size:11},boxWidth:12,padding:12}},
+      tooltip:{backgroundColor:'#0d1425',titleColor:'#e8ecf7',bodyColor:'#8b97b3',borderColor:'#1a2640',borderWidth:1,padding:10,cornerRadius:8}
+    }
+  };
+}
+function axisDefaults() {
+  return {
+    x:{ticks:{color:'#6b7a99',font:{size:11}},grid:{color:'#12192e'},border:{color:'#1a2640'}},
+    y:{ticks:{color:'#6b7a99',font:{size:11}},grid:{color:'#12192e'},border:{color:'#1a2640'}}
+  };
+}
+function destroyChart(id) {
+  if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+function showChartEmpty(id, msg) {
+  destroyChart(id);
+  const canvas=document.getElementById(id);
+  if (canvas) canvas.style.display='none';
+  const empty=document.getElementById(id+'-empty');
+  if (empty) { empty.textContent=msg; empty.style.display='grid'; }
+}
+function showChart(id) {
+  const canvas=document.getElementById(id);
+  if (canvas) canvas.style.display='block';
+  const empty=document.getElementById(id+'-empty');
+  if (empty) empty.style.display='none';
+}
+function makeChart(id, config) {
+  destroyChart(id);
+  showChart(id);
+  const canvas=document.getElementById(id);
+  if (!canvas) return;
+  chartInstances[id]=new Chart(canvas, config);
+}
 
-      return sessionRows.map(sess => ({
-        happytrace_format: 'opencode-session-v1',
-        runtime: 'OpenCode',
-        session: {
-          id: sess.id,
-          slug: sess.slug,
-          project_id: sess.project_id,
-          directory: sess.directory,
-          title: sess.title,
-          version: sess.version,
-          time_created: sess.time_created,
-          time_updated: sess.time_updated,
-        },
-        messages: (messagesBySession.get(sess.id) || []).map(message => ({
-          ...message,
-          parts: partsByMessage.get(message.id) || []
+function renderAnalyticsCharts(data) {
+  const days=data.byDay;
+
+  /* ── Timeline chart ── */
+  if (days.length>0) {
+    makeChart('chart-timeline',{
+      type:'bar',
+      data:{
+        labels:days.map(d=>d.day),
+        datasets:[
+          {label:'Sessions',data:days.map(d=>d.sessions),backgroundColor:'rgba(110,168,254,.7)',borderRadius:3,borderSkipped:false},
+          {label:'LLM Requests',data:days.map(d=>d.requests),backgroundColor:'rgba(94,223,255,.5)',borderRadius:3,borderSkipped:false},
+        ]
+      },
+      options:{...chartDefaults(),responsive:true,maintainAspectRatio:false,scales:{...axisDefaults(),x:{...axisDefaults().x,stacked:false},y:{...axisDefaults().y,beginAtZero:true}}}
+    });
+  } else {
+    showChartEmpty('chart-timeline','暂无时间数据');
+  }
+
+  /* ── Runtime distribution ── */
+  const runtimeLabels=Object.keys(data.byRuntime);
+  const runtimeCounts=runtimeLabels.map(k=>data.byRuntime[k]);
+  if (runtimeLabels.length) {
+    makeChart('chart-runtime',{
+      type:'doughnut',
+      data:{
+        labels:runtimeLabels,
+        datasets:[{data:runtimeCounts,backgroundColor:runtimeLabels.map(k=>RUNTIME_COLORS[k]||CHART_COLORS[4]),borderColor:'#0d1425',borderWidth:2,hoverOffset:6}]
+      },
+      options:{...chartDefaults(),responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{...chartDefaults().plugins,legend:{...chartDefaults().plugins.legend,position:'right'}}}
+    });
+  } else {
+    showChartEmpty('chart-runtime','暂无数据');
+  }
+
+  /* ── Token usage by model ── */
+  const modelNames=Object.keys(data.tokenByModelByDay);
+  const allDays=[...new Set(modelNames.flatMap(m=>Object.keys(data.tokenByModelByDay[m]||{})))].sort();
+  if (modelNames.length&&allDays.length) {
+    makeChart('chart-tokens',{
+      type:'line',
+      data:{
+        labels:allDays,
+        datasets:modelNames.map((m,i)=>({
+          label:m,
+          data:allDays.map(d=>data.tokenByModelByDay[m][d]||0),
+          borderColor:CHART_COLORS[i%CHART_COLORS.length],
+          backgroundColor:CHART_COLORS[i%CHART_COLORS.length]+'20',
+          tension:.3,pointRadius:3,pointHoverRadius:5,fill:false,borderWidth:2
         }))
-      }));
-    }
+      },
+      options:{...chartDefaults(),responsive:true,maintainAspectRatio:false,scales:axisDefaults()}
+    });
+  } else {
+    showChartEmpty('chart-tokens','需要 OpenCode LLM 日志才能显示 token 趋势');
+  }
 
-    async function loadFromOpenCodeDbFile(file) {
-      const SQL = await loadSqlJsLibrary();
-      const buffer = await file.arrayBuffer();
-      const db = new SQL.Database(new Uint8Array(buffer));
-      try {
-        const exportedSessions = reconstructOpenCodeExportsFromDb(db);
-        const sessions = exportedSessions.map((exported, idx) => normalizeOpenCodeExportedSession(exported, idx, []));
-        sessions.sort((a, b) => (toEpochMs(b.last_event_at) || 0) - (toEpochMs(a.last_event_at) || 0));
-        return { sessions };
-      } finally {
-        db.close();
-      }
-    }
+  /* ── Top tools ── */
+  const toolEntries=Object.entries(data.toolUsage).sort((a,b)=>b[1].calls-a[1].calls).slice(0,15);
+  if (toolEntries.length) {
+    makeChart('chart-tools',{
+      type:'bar',
+      data:{
+        labels:toolEntries.map(([name])=>name.length>22?name.slice(0,22)+'…':name),
+        datasets:[
+          {label:'Calls',data:toolEntries.map(([,v])=>v.calls),backgroundColor:'rgba(61,220,151,.7)',borderRadius:3},
+          {label:'Errors',data:toolEntries.map(([,v])=>v.errors),backgroundColor:'rgba(255,107,107,.7)',borderRadius:3}
+        ]
+      },
+      options:{...chartDefaults(),indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{...axisDefaults(),x:{...axisDefaults().x,beginAtZero:true},y:{...axisDefaults().y,ticks:{...axisDefaults().y.ticks,font:{size:10}}}}}
+    });
+  } else {
+    showChartEmpty('chart-tools','暂无工具调用数据');
+  }
 
-    async function connectOpenCodeDb() {
-      if (window.showOpenFilePicker) {
-        const [handle] = await window.showOpenFilePicker({
-          multiple: false,
-          types: [{
-            description: 'OpenCode SQLite DB',
-            accept: {
-              'application/octet-stream': ['.db', '.sqlite', '.sqlite3']
-            }
-          }]
-        });
-        if (!handle) return;
-        const file = await handle.getFile();
-        state.data = await loadFromOpenCodeDbFile(file);
-        state.sourceMode = 'opencode-db';
-        state.lastLoadedAt = new Date().toLocaleTimeString();
-        state.activeSessionId = state.data.sessions[0]?.id || null;
-        state.activeEventId = null;
-        hydrateFilters();
-        render();
-        return;
-      }
-      $('#opencodeDbInput').click();
-    }
+  /* ── Model table ── */
+  const modelRows=Object.entries(data.byModel).sort((a,b)=>b[1].requests-a[1].requests);
+  const tbody=$('#modelTableBody');
+  if (!tbody) return;
+  if (!modelRows.length) {
+    tbody.innerHTML='<tr><td colspan="6" style="color:var(--muted);padding:16px 8px">暂无模型数据</td></tr>';
+  } else {
+    tbody.innerHTML=modelRows.map(([name,m])=>`
+      <tr>
+        <td class="model-name">${escapeHtml(name)}</td>
+        <td class="num">${formatNum(m.requests)}</td>
+        <td class="num">${m.inputTokens>0?formatNum(m.inputTokens):'—'}</td>
+        <td class="num">${m.outputTokens>0?formatNum(m.outputTokens):'—'}</td>
+        <td class="num">${m.avgTtft>0?formatDurationCompact(m.avgTtft):'—'}</td>
+        <td class="num">${formatNum(m.sessionCount)}</td>
+      </tr>
+    `).join('');
+  }
+}
 
-    async function connectDirectory() {
-      if (!window.showDirectoryPicker) {
-        alert('当前浏览器不支持目录连接。可改用右侧文件夹选择，或用 Chrome/Arc 打开。');
-        return;
-      }
-      const handle = await window.showDirectoryPicker({ mode: 'read' });
-      directoryHandle = handle;
-      await idbSet('sessionsDirHandle', handle);
-      state.sourceMode = 'handle';
-      await reloadData();
-      startAutoRefresh();
-    }
+function renderAnalyticsKPIs(data) {
+  const setText=(id,val,sub='')=>{ const el=$(id); if(el){el.textContent=val;} const subEl=$(id+'-sub'); if(subEl&&sub) subEl.textContent=sub; };
+  setText('#kpi-sessions', formatNum(data.totalSessions), `${Object.keys(data.byRuntime).join(' / ') || '—'}`);
+  setText('#kpi-requests', formatNum(data.totalRequests), data.totalRequests>0?'LLM calls':'no LLM logs');
+  setText('#kpi-tokens',   data.totalTokens>0?formatNum(data.totalTokens):'—', data.totalTokens>0?'total tokens':'no token logs');
+  setText('#kpi-tools',    formatNum(data.totalTools),   data.totalTools>0?'tool invocations':'');
+  setText('#kpi-ttft',     data.avgTtft>0?formatDurationCompact(data.avgTtft):'—', data.avgTtft>0?'avg first token':'no TTFT data');
+}
 
-    async function restoreDirectoryHandle() {
-      if (!window.showDirectoryPicker) return false;
-      try {
-        const handle = await idbGet('sessionsDirHandle');
-        if (!handle) return false;
-        const perm = await handle.queryPermission({ mode: 'read' });
-        if (perm === 'granted') {
-          directoryHandle = handle;
-          state.sourceMode = 'handle';
-          await reloadData();
-          startAutoRefresh();
-          return true;
-        }
-      } catch {}
-      return false;
-    }
+function renderAnalytics() {
+  if (typeof Chart === 'undefined') {
+    setTimeout(renderAnalytics, 100);
+    return;
+  }
+  const sessions=state.data.sessions;
+  if (!sessions.length) {
+    ['#kpi-sessions','#kpi-requests','#kpi-tokens','#kpi-tools','#kpi-ttft'].forEach(id=>{ const el=$(id); if(el) el.textContent='—'; });
+    return;
+  }
+  const data=buildAnalyticsData(sessions, analyticsRange);
+  renderAnalyticsKPIs(data);
+  renderAnalyticsCharts(data);
+}
 
-    async function reloadData() {
-      try {
-        if (state.sourceMode === 'handle' && directoryHandle) {
-          state.data = await loadFromDirectoryHandle(directoryHandle);
-        }
-        state.lastLoadedAt = new Date().toLocaleTimeString();
-        if (!state.activeSessionId || !state.data.sessions.some(s => s.id === state.activeSessionId)) {
-          state.activeSessionId = state.data.sessions[0]?.id || null;
-          state.activeEventId = null;
-        }
-        hydrateFilters();
-        render();
-      } catch (err) {
-        console.error(err);
-        alert('加载失败：' + err.message);
-      }
-    }
+/* ═══════════════════════════════════════
+   Session Stats — per-session analytics
+   ═══════════════════════════════════════ */
 
-    function startAutoRefresh() {
-      clearInterval(autoRefreshTimer);
-      if (state.sourceMode === 'handle' && directoryHandle) {
-        autoRefreshTimer = setInterval(() => reloadData(), AUTO_REFRESH_MS);
-      }
-    }
+function buildSessionStats(session) {
+  const events = session.events || [];
+  const stats = session.opencode_stats || null;
 
-    function renderSessions() {
-      const sessions = state.data.sessions || [];
-      sessionCount.textContent = sessions.length;
-      if (!sessions.length) {
-        sessionsPanel.innerHTML = '<div class="empty">还没有读到 session 日志。<br><br>推荐：把这个 HTML 用本地 server 打开，然后点「连接 sessions 目录」或「载入 OpenCode DB」。<br><span class="small">可选目录：~/.hermes、~/.codex、~/.claude、~/.local/share/opencode，或直接选 opencode.db / opencode-local.db</span></div>';
-        return;
-      }
-      sessionsPanel.innerHTML = sessions.map(s => `
-        <div class="session-item ${s.id === state.activeSessionId ? 'active' : ''}" data-session-id="${s.id}">
-          <div class="session-title">
-            <span>${escapeHtml(guessDisplayName(s))}</span>
-            <span class="mono">${s.events?.length || 0}</span>
-          </div>
-          <div class="meta">
-            <span>${escapeHtml(s.project || '-')}</span>
-            <span>${escapeHtml(s.runtime || '-')}</span>
-          </div>
-          <div class="meta mono">${escapeHtml(s.started_at || '')}</div>
-        </div>
-      `).join('');
-      [...sessionsPanel.querySelectorAll('.session-item')].forEach(el => {
-        el.onclick = () => {
-          state.activeSessionId = el.dataset.sessionId;
-          state.activeEventId = null;
-          hydrateFilters();
-          render();
-        };
+  // Duration
+  const startMs = toEpochMs(session.started_at);
+  const endMs   = toEpochMs(session.last_event_at);
+  const wallMs  = (startMs && endMs && endMs >= startMs) ? endMs - startMs : stats?.wallMs ?? null;
+
+  // Event type distribution
+  const typeCounts = {};
+  for (const e of events) typeCounts[e.type] = (typeCounts[e.type] || 0) + 1;
+
+  // Tool usage
+  const toolCounts = {};
+  for (const e of events) {
+    if ((e.type === 'AssistantToolCall' || e.type === 'ToolCall') && e.tool) {
+      toolCounts[e.tool] = (toolCounts[e.tool] || 0) + 1;
+    }
+  }
+
+  // Per-LLM-request data — prefer LLMResponse (JSONL), fall back to StepFinish (SQLite DB)
+  const hasLlmResp = events.some(e => e.type === 'LLMResponse' || e.type === 'LLMResponseToolCalls');
+  const llmRequests = [];
+  for (const e of events) {
+    if (e.type === 'LLMResponse' || e.type === 'LLMResponseToolCalls') {
+      const p = e.payload || {};
+      llmRequests.push({
+        model: p.modelID || p.model || 'unknown',
+        total: Number(p.tokens?.total || 0),
+        input: Number(p.tokens?.input || 0),
+        output: Number(p.tokens?.output || 0),
+        cacheRead: Number(p.tokens?.cache_read || 0),
+        duration: Number(p.totalDuration || 0),
       });
     }
-
-    function renderMeta() {
-      const s = currentSession();
-      if (!s) {
-        metaPanel.innerHTML = '<div class="empty">无 session</div>';
-        return;
-      }
-      const stats = s.runtime === 'OpenCode' ? s.opencode_stats : null;
-      const sessionModels = s.raw?.models?.length ? s.raw.models : (s.raw?.model ? [s.raw.model] : []);
-      metaPanel.innerHTML = `
-        <div class="meta-grid">
-          <div>Runtime</div><div>${escapeHtml(s.runtime || '-')}</div>
-          <div>Platform</div><div>${escapeHtml(s.project || '-')}</div>
-          <div>Session</div><div class="mono">${escapeHtml(s.id || '-')}</div>
-          <div>Started</div><div class="mono">${escapeHtml(s.started_at || '-')}</div>
-          <div>Last Event</div><div class="mono">${escapeHtml(s.last_event_at || '-')}</div>
-          <div>Events</div><div>${s.events?.length || 0}</div>
-          <div>Messages</div><div>${s.raw?.message_count || s.raw?.messages?.length || 0}</div>
-          <div>Model</div><div>${escapeHtml(formatList(sessionModels))}</div>
-          <div>Source</div><div>${escapeHtml(s.index_meta?.session_key || s.index_meta?.thread_name || s.raw?.source || '-')}</div>
-          ${stats ? `
-            <div>Source Layers</div><div>${escapeHtml(formatList(stats.sourceKinds))}</div>
-            <div>LLM Requests</div><div>${escapeHtml(formatCount(stats.llmRequests))}</div>
-            <div>Tool Calls</div><div>${escapeHtml(formatCount(stats.toolCalls))}</div>
-            <div>Errors</div><div>${escapeHtml(`${formatCount(stats.totalErrors)} (llm ${formatCount(stats.llmErrors)} · tool ${formatCount(stats.toolErrors)})`)}</div>
-            <div>Agents</div><div>${escapeHtml(formatList(stats.agents))}</div>
-            <div>Modes</div><div>${escapeHtml(formatList(stats.modes))}</div>
-            <div>Wall Time</div><div class="mono">${escapeHtml(formatDurationCompact(stats.wallMs))}</div>
-            <div>LLM Time</div><div class="mono">${escapeHtml(formatDurationCompact(stats.llmDurationMs))}</div>
-            <div>Total Tokens</div><div>${escapeHtml(formatCount(stats.totalTokens))}</div>
-            <div>Avg TTFT</div><div class="mono">${stats.avgTtftMs != null ? escapeHtml(formatDurationCompact(stats.avgTtftMs)) : '-'}</div>
-          ` : ''}
-        </div>
-      `;
-    }
-
-    function renderAgents() {
-      const s = currentSession();
-      if (!s) {
-        agentsPanel.innerHTML = '<div class="empty">无 role</div>';
-        return;
-      }
-      const agents = Array.from(new Set((s.agents || []).concat((s.events || []).map(e => e.agent).filter(Boolean))));
-      agentsPanel.innerHTML = `<div class="agents">${agents.map(a => `<div class="agent-chip ${state.activeAgent === a ? 'active' : ''}" data-agent="${escapeHtml(a)}">${escapeHtml(a)}</div>`).join('')}</div>`;
-      [...agentsPanel.querySelectorAll('.agent-chip')].forEach(el => {
-        el.onclick = () => {
-          state.activeAgent = state.activeAgent === el.dataset.agent ? '' : el.dataset.agent;
-          agentFilter.value = state.activeAgent;
-          state.activeEventId = null;
-          render();
-        };
+    if (!hasLlmResp && (e.type === 'StepFinish' || e.type === 'StepFinishToolCalls')) {
+      const pd = e.payload?.part?.data || {};
+      const tokens = pd.tokens || {};
+      const model = e.payload?.message?.data?.modelID || session.raw?.model || session.raw?.models?.[0] || 'unknown';
+      llmRequests.push({
+        model,
+        total: Number(tokens.total || 0),
+        input: Number(tokens.input || 0),
+        output: Number(tokens.output || 0),
+        cacheRead: Number(tokens.cache?.read || 0),
+        cacheWrite: Number(tokens.cache?.write || 0),
+        duration: 0,
       });
     }
+  }
 
-    function getEventSourceInfo(session, event) {
-      if (session?.runtime !== 'OpenCode') return null;
-      if (isOpenCodeDeepEvent(event)) {
-        return { label: 'deep', className: 'src-deep' };
-      }
-      if (isOpenCodeLlmEvent(event)) {
-        return { label: 'llm', className: 'src-llm' };
-      }
-      if (session?.index_meta?.source_path === 'happytrace-export+llm-logs') {
-        return { label: 'mixed', className: 'src-mixed' };
-      }
-      return null;
+  // TTFT samples (OpenCode)
+  const ttftSamples = [];
+  for (const e of events) {
+    if (e.type === 'FirstToken') {
+      const ttft = Number(e.payload?.ttft || 0);
+      if (ttft > 0) ttftSamples.push({ model: e.payload?.modelID || 'unknown', ttft });
     }
+  }
 
-    function renderEvents() {
-      const s = currentSession();
-      const events = visibleEvents(s);
-      eventCount.textContent = events.length;
-      if (!events.length) {
-        eventsPanel.innerHTML = '<div class="empty">当前筛选下没有事件</div>';
-        detailPanel.innerHTML = '<div class="empty">选一条事件看 detail</div>';
-        detailTitle.textContent = '未选中';
-        return;
-      }
-      if (!events.some(e => String(e.id) === String(state.activeEventId))) state.activeEventId = events[0].id;
-      eventsPanel.innerHTML = `<div class="event-list">${events.map(e => {
-        const source = getEventSourceInfo(s, e);
-        return `
-        <div class="event-row ${String(e.id) === String(state.activeEventId) ? 'active' : ''}" data-event-id="${e.id}">
-          <div class="mono">#${e.id}</div>
-          <div class="mono">${escapeHtml(e.time || '')}</div>
-          <div>${escapeHtml(e.agent || '-')}</div>
-          <div><span class="badge t-${escapeHtml(e.type || 'Unknown')}">${escapeHtml(e.type || '-')}</span>${source ? `<span class="source-badge ${source.className}">${escapeHtml(source.label)}</span>` : ''}</div>
-          <div class="mono ${e.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(e.tool || e.status || '-')}</div>
-          <div class="summary">${escapeHtml(e.summary || '')}</div>
+  // KPIs
+  const totalTokens = stats?.totalTokens || llmRequests.reduce((a, r) => a + r.total, 0);
+  const toolCallCount = Object.values(toolCounts).reduce((a, b) => a + b, 0);
+  const llmReqCount   = stats?.llmRequests ?? llmRequests.length;
+  const avgTtft       = stats?.avgTtftMs ?? (ttftSamples.length ? ttftSamples.reduce((a, s) => a + s.ttft, 0) / ttftSamples.length : null);
+
+  return { wallMs, typeCounts, toolCounts, llmRequests, ttftSamples, totalTokens, toolCallCount, llmReqCount, avgTtft };
+}
+
+function renderSessionStats() {
+  if (typeof Chart === 'undefined') { setTimeout(renderSessionStats, 100); return; }
+
+  const session = currentSession();
+  if (!session) {
+    sessionStatsPanel.innerHTML = '<div class="empty">无 session</div>';
+    return;
+  }
+
+  // Collect subagent sessions too
+  const sessions = [session, ...(session.subagent_ids || []).map(id => state.data.sessions.find(s => s.id === id)).filter(Boolean)];
+  // Merge stats from all sessions in the group
+  const merged = sessions.map(buildSessionStats);
+  const primary = merged[0];
+  const wallMs  = primary.wallMs;
+
+  const typeCounts = {}, toolCounts = {};
+  const llmRequests = [], ttftSamples = [];
+  let totalTokens = 0, toolCallCount = 0, llmReqCount = 0;
+  for (const m of merged) {
+    for (const [k, v] of Object.entries(m.typeCounts)) typeCounts[k] = (typeCounts[k] || 0) + v;
+    for (const [k, v] of Object.entries(m.toolCounts)) toolCounts[k] = (toolCounts[k] || 0) + v;
+    llmRequests.push(...m.llmRequests);
+    ttftSamples.push(...m.ttftSamples);
+    totalTokens   += m.totalTokens;
+    toolCallCount += m.toolCallCount;
+    llmReqCount   += m.llmReqCount;
+  }
+  const avgTtft = ttftSamples.length ? ttftSamples.reduce((a, s) => a + s.ttft, 0) / ttftSamples.length : null;
+  const totalEvents = sessions.reduce((a, s) => a + (s.events?.length || 0), 0);
+
+  // Sub-agents section
+  const subagentSessions = sessions.slice(1);
+  const subagentHtml = subagentSessions.length ? `
+    <div class="ss-subagents">
+      <div class="ss-subagents-title">包含 ${subagentSessions.length} 个 Sub-agent</div>
+      ${subagentSessions.map(sub => `
+        <div class="ss-subagent-item" data-goto-session="${escapeHtml(sub.id)}">
+          <span class="subagent-badge">sub-agent</span>
+          <span>${escapeHtml(truncate(guessDisplayName(sub), 40))}</span>
+          <span style="color:var(--muted);font-size:11px;margin-left:auto">${sub.events?.length||0} evt</span>
         </div>
-      `;}).join('')}</div>`;
-      [...eventsPanel.querySelectorAll('.event-row')].forEach(el => {
-        el.onclick = () => {
-          state.activeEventId = el.dataset.eventId;
-          renderDetail();
-          renderStatus();
-          [...eventsPanel.querySelectorAll('.event-row')].forEach(x => x.classList.remove('active'));
-          el.classList.add('active');
-        };
+      `).join('')}
+    </div>` : '';
+
+  sessionStatsPanel.innerHTML = `
+    <div class="ss-kpi-row">
+      <div class="ss-kpi"><div class="ss-kpi-label">Duration</div><div class="ss-kpi-value">${wallMs!=null?formatDurationCompact(wallMs):'—'}</div></div>
+      <div class="ss-kpi"><div class="ss-kpi-label">Events</div><div class="ss-kpi-value">${formatNum(totalEvents)}</div><div class="ss-kpi-sub">${sessions.length>1?`含 ${sessions.length} 个 session`:''}</div></div>
+      <div class="ss-kpi"><div class="ss-kpi-label">LLM Req</div><div class="ss-kpi-value">${formatNum(llmReqCount)}</div></div>
+      <div class="ss-kpi"><div class="ss-kpi-label">Tokens</div><div class="ss-kpi-value">${totalTokens>0?formatNum(totalTokens):'—'}</div></div>
+      <div class="ss-kpi"><div class="ss-kpi-label">Avg TTFT</div><div class="ss-kpi-value">${avgTtft!=null?formatDurationCompact(avgTtft):'—'}</div></div>
+    </div>
+    <div class="ss-charts">
+      <div class="ss-chart-card">
+        <div class="ss-chart-title">Event 类型分布</div>
+        <div class="ss-chart-wrap short">
+          <canvas id="ss-chart-types"></canvas>
+          <div class="ss-chart-empty" id="ss-chart-types-empty" style="display:none">暂无数据</div>
+        </div>
+      </div>
+      <div class="ss-chart-card">
+        <div class="ss-chart-title">Tool 调用频次</div>
+        <div class="ss-chart-wrap short">
+          <canvas id="ss-chart-tools"></canvas>
+          <div class="ss-chart-empty" id="ss-chart-tools-empty" style="display:none">无 tool 调用</div>
+        </div>
+      </div>
+      <div class="ss-chart-card full">
+        <div class="ss-chart-title">每次 LLM 请求 Token 数 &amp; TTFT</div>
+        <div class="ss-chart-wrap">
+          <canvas id="ss-chart-llm"></canvas>
+          <div class="ss-chart-empty" id="ss-chart-llm-empty" style="display:none">需要 OpenCode LLM 日志</div>
+        </div>
+      </div>
+    </div>
+    ${subagentHtml}
+  `;
+
+  // ── Event type chart ──
+  const typeEntries = Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  if (typeEntries.length) {
+    const ssChart = id => { const c=document.getElementById(id); if(c) c.style.display='block'; const e=document.getElementById(id+'-empty'); if(e) e.style.display='none'; return c; };
+    const ssEmpty = (id,msg) => { const c=document.getElementById(id); if(c) c.style.display='none'; const e=document.getElementById(id+'-empty'); if(e){e.textContent=msg;e.style.display='grid';} };
+    const ssCD = id => { if(chartInstances[id]){chartInstances[id].destroy();delete chartInstances[id];} };
+
+    ssCD('ss-chart-types'); ssChart('ss-chart-types');
+    chartInstances['ss-chart-types'] = new Chart(document.getElementById('ss-chart-types'), {
+      type:'doughnut',
+      data:{labels:typeEntries.map(([k])=>k),datasets:[{data:typeEntries.map(([,v])=>v),backgroundColor:CHART_COLORS,borderColor:'#0d1425',borderWidth:2}]},
+      options:{...chartDefaults(),responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{...chartDefaults().plugins,legend:{...chartDefaults().plugins.legend,position:'right',labels:{...chartDefaults().plugins.legend.labels,boxWidth:10,font:{size:10}}}}}
+    });
+
+    // ── Tool chart ──
+    const toolEntries = Object.entries(toolCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    if (toolEntries.length) {
+      ssCD('ss-chart-tools'); ssChart('ss-chart-tools');
+      chartInstances['ss-chart-tools'] = new Chart(document.getElementById('ss-chart-tools'), {
+        type:'bar',
+        data:{labels:toolEntries.map(([k])=>k.length>18?k.slice(0,18)+'…':k),datasets:[{data:toolEntries.map(([,v])=>v),backgroundColor:'rgba(61,220,151,.7)',borderRadius:3}]},
+        options:{...chartDefaults(),indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{...chartDefaults().plugins,legend:{display:false}},scales:{...axisDefaults(),x:{...axisDefaults().x,beginAtZero:true},y:{...axisDefaults().y,ticks:{...axisDefaults().y.ticks,font:{size:10}}}}}
       });
-      renderDetail();
-    }
+    } else { ssEmpty('ss-chart-tools','无 tool 调用'); }
 
-    function renderOpenCodeToolExtras(e) {
-      const state = e.payload?.tool_state;
-      if (!state) return '';
-      const durationMs = e.payload?.duration_ms;
-      const metadata = state.metadata ? JSON.stringify(state.metadata, null, 2) : '';
-      const title = state.title || '';
-      return `
-        <div class="section">
-          <div class="section-title">OpenCode Tool Meta</div>
-          <div class="detail-grid">
-            <div>Tool Status</div><div class="${state.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(state.status || '-')}</div>
-            <div>Tool Title</div><div>${escapeHtml(title || '-')}</div>
-            <div>Duration</div><div class="mono">${durationMs != null ? escapeHtml(String(durationMs) + ' ms') : '-'}</div>
-            <div>Started</div><div class="mono">${state.time?.start ? escapeHtml(toIsoFromMs(state.time.start)) : '-'}</div>
-            <div>Ended</div><div class="mono">${state.time?.end ? escapeHtml(toIsoFromMs(state.time.end)) : '-'}</div>
-          </div>
-        </div>
-        ${metadata ? `<div class="section"><div class="section-title">OpenCode Tool Metadata</div><pre>${escapeHtml(metadata)}</pre></div>` : ''}
-      `;
-    }
-
-    function renderDetail() {
-      const s = currentSession();
-      const e = (s?.events || []).find(x => String(x.id) === String(state.activeEventId));
-      if (!e) {
-        detailPanel.innerHTML = '<div class="empty">选一条事件看 detail</div>';
-        detailTitle.textContent = '未选中';
-        return;
+    // ── LLM per-request chart ──
+    if (llmRequests.length) {
+      ssCD('ss-chart-llm'); ssChart('ss-chart-llm');
+      const labels = llmRequests.map((_,i) => `#${i+1}`);
+      const ttftData = ttftSamples.map((s,i) => ({x:i,y:s.ttft}));
+      const hasCacheData = llmRequests.some(r => (r.cacheRead||0) > 0 || (r.cacheWrite||0) > 0);
+      const llmDatasets = [
+        {label:'Input',   data:llmRequests.map(r=>r.input),  backgroundColor:'rgba(110,168,254,.7)',borderRadius:2,stack:'tok'},
+        {label:'Output',  data:llmRequests.map(r=>r.output), backgroundColor:'rgba(61,220,151,.7)', borderRadius:2,stack:'tok'},
+      ];
+      if (hasCacheData) {
+        llmDatasets.push({label:'Cache Read', data:llmRequests.map(r=>r.cacheRead||0), backgroundColor:'rgba(94,223,255,.5)',borderRadius:2,stack:'tok'});
+        llmDatasets.push({label:'Cache Write',data:llmRequests.map(r=>r.cacheWrite||0),backgroundColor:'rgba(255,209,102,.4)',borderRadius:2,stack:'tok'});
       }
-      const isOpenCodeToolEvent = s?.runtime === 'OpenCode' && (e.type === 'ToolCall' || e.type === 'ToolResult') && e.payload?.tool_state;
-      const source = getEventSourceInfo(s, e);
-      detailTitle.textContent = `${e.type || 'Event'} #${e.id}`;
-      detailPanel.innerHTML = `
-        <div class="detail-grid">
-          <div>Agent</div><div>${escapeHtml(e.agent || '-')}</div>
-          <div>Type</div><div>${escapeHtml(e.type || '-')}</div>
-          <div>Tool</div><div class="mono">${escapeHtml(e.tool || '-')}</div>
-          <div>Time</div><div class="mono">${escapeHtml(e.time || '-')}</div>
-          <div>Source</div><div>${source ? `<span class="source-badge ${source.className}">${escapeHtml(source.label)}</span>` : '-'}</div>
-          <div>Status</div><div class="${e.status === 'error' ? 's-error' : 's-completed'}">${escapeHtml(e.status || '-')}</div>
-          <div>Summary</div><div>${escapeHtml(e.summary || '-')}</div>
-        </div>
-        ${isOpenCodeToolEvent ? renderOpenCodeToolExtras(e) : ''}
-        ${e.content ? `<div class="section"><div class="section-title">Content / Input</div><pre>${escapeHtml(e.content)}</pre></div>` : ''}
-        ${e.output ? `<div class="section"><div class="section-title">Output / Reasoning</div><pre>${escapeHtml(e.output)}</pre></div>` : ''}
-        ${e.payload ? `<div class="section"><div class="section-head"><div class="section-title">Payload</div><button class="copy-btn" type="button" data-copy-text="${escapeHtml(JSON.stringify(e.payload, null, 2))}">Copy</button></div><pre>${escapeHtml(JSON.stringify(e.payload, null, 2))}</pre></div>` : ''}
-      `;
-    }
+      chartInstances['ss-chart-llm'] = new Chart(document.getElementById('ss-chart-llm'), {
+        type:'bar',
+        data:{ labels, datasets:llmDatasets },
+        options:{...chartDefaults(),responsive:true,maintainAspectRatio:false,scales:{...axisDefaults(),x:{...axisDefaults().x,stacked:true},y:{...axisDefaults().y,beginAtZero:true,stacked:true}}}
+      });
+    } else { ssEmpty('ss-chart-llm','需要 OpenCode LLM 日志'); }
+  }
 
-    function hydrateFilters() {
-      const s = currentSession();
-      const types = Array.from(new Set((s?.events || []).map(e => e.type).filter(Boolean)));
-      const agents = Array.from(new Set((s?.events || []).map(e => e.agent).filter(Boolean)));
-      typeFilter.innerHTML = '<option value="">全部类型</option>' + types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
-      agentFilter.innerHTML = '<option value="">全部 role</option>' + agents.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
-      typeFilter.value = state.activeType;
-      agentFilter.value = state.activeAgent;
-    }
-
-    function renderStatus() {
-      const s = currentSession();
-      const events = visibleEvents(s);
-      const selected = events.find(e => String(e.id) === String(state.activeEventId));
-      statusBar.innerHTML = `
-        <span>source: ${escapeHtml(state.sourceMode)}</span>
-        <span>sessions: ${state.data.sessions.length}</span>
-        <span>session: ${escapeHtml(s?.id || '-')}</span>
-        <span>events: ${events.length}/${s?.events?.length || 0}</span>
-        <span>role: ${escapeHtml(state.activeAgent || 'all')}</span>
-        <span>type: ${escapeHtml(state.activeType || 'all')}</span>
-        <span>search: ${escapeHtml(state.search || 'off')}</span>
-        <span>selected: ${selected ? '#' + selected.id : '-'}</span>
-        <span>last_loaded: ${escapeHtml(state.lastLoadedAt || '-')}</span>
-        <span>${state.sourceMode === 'handle' ? 'auto_refresh: on' : 'auto_refresh: off'}</span>
-      `;
-    }
-
-    function render() {
-      renderSessions();
-      renderMeta();
-      renderAgents();
-      renderEvents();
-      renderStatus();
-    }
-
-    $('#searchInput').addEventListener('input', e => {
-      state.search = e.target.value.trim();
+  // Sub-agent item click
+  sessionStatsPanel.querySelectorAll('[data-goto-session]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.activeSessionId = el.dataset.gotoSession;
       state.activeEventId = null;
+      hydrateFilters();
       render();
+      switchEventsTab('events');
     });
-    typeFilter.addEventListener('change', e => {
-      state.activeType = e.target.value;
-      state.activeEventId = null;
-      render();
-    });
-    agentFilter.addEventListener('change', e => {
-      state.activeAgent = e.target.value;
-      state.activeEventId = null;
-      render();
-    });
+  });
+}
 
-    $('#connectBtn').addEventListener('click', async () => {
-      try { await connectDirectory(); }
-      catch (err) { console.error(err); }
-    });
+/* ── Range selector ── */
+document.querySelectorAll('.range-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    analyticsRange=btn.dataset.range;
+    document.querySelectorAll('.range-btn').forEach(b=>b.classList.toggle('active',b===btn));
+    renderAnalytics();
+  });
+});
 
-    $('#openCodeDbBtn').addEventListener('click', async () => {
-      try { await connectOpenCodeDb(); }
-      catch (err) {
-        console.error(err);
-        alert('OpenCode DB 载入失败：' + err.message);
-      }
-    });
+/* ═══════════════════════════════════════
+   Sessions view — Render
+   ═══════════════════════════════════════ */
 
-    $('#opencodeDbInput').addEventListener('change', async e => {
-      try {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        state.data = await loadFromOpenCodeDbFile(file);
-        state.sourceMode = 'opencode-db';
-        state.lastLoadedAt = new Date().toLocaleTimeString();
-        state.activeSessionId = state.data.sessions[0]?.id || null;
-        state.activeEventId = null;
-        hydrateFilters();
+function runtimeClass(runtime) { return `rt-${runtime||'Unknown'}`; }
+
+function renderSessions() {
+  const sessions=state.data.sessions||[];
+  sessionCount.textContent=sessions.length;
+  if (!sessions.length) {
+    sessionsPanel.innerHTML='<div class="empty">还没有读到 session 日志。<br><br>点「连接目录」选择 ~/.hermes / ~/.codex / ~/.claude / OpenCode sessions 目录，<br>或点「载入 DB」选择 opencode.db。<br><span style="font-size:11px;color:var(--muted)">Chrome / Arc 支持记住目录并自动刷新</span></div>';
+    return;
+  }
+  sessionsPanel.innerHTML=sessions.map(s=>{
+    const models=(s.raw?.models||[]).filter(Boolean).slice(0,2);
+    const modelChips=models.map(m=>`<span class="model-chip">${escapeHtml(m.split('/').pop()||m)}</span>`).join('');
+    const subagentCount=(s.subagent_ids||[]).length;
+    const subBadge=s.is_subagent?`<span class="subagent-badge">sub-agent</span>`:'';
+    const subCount=subagentCount>0?`<span class="parent-badge">${subagentCount} sub</span>`:'';
+    const indent=s.is_subagent?'margin-left:12px;':'';
+    return `
+    <div class="session-item ${s.id===state.activeSessionId?'active':''}" data-session-id="${escapeHtml(s.id)}" style="${indent}">
+      <div class="session-title"><span>${escapeHtml(guessDisplayName(s))}</span><span>${s.events?.length||0} evt</span></div>
+      <div class="session-meta">
+        ${subBadge||`<span class="runtime-badge ${runtimeClass(s.runtime)}">${escapeHtml(s.runtime||'?')}</span>`}
+        ${subCount}
+        ${modelChips}
+      </div>
+      <div class="session-time">${escapeHtml(s.started_at?.slice(0,16).replace('T',' ')||'')}</div>
+    </div>`;
+  }).join('');
+  [...sessionsPanel.querySelectorAll('.session-item')].forEach(el=>{
+    el.onclick=()=>{
+      state.activeSessionId=el.dataset.sessionId;
+      state.activeEventId=null;
+      hydrateFilters();
+      if (state.activeEventsTab==='stats') {
+        // stay on stats, just refresh it
         render();
-      } catch (err) {
-        console.error(err);
-        alert('OpenCode DB 文件读取失败：' + err.message);
-      } finally {
-        e.target.value = '';
-      }
-    });
-
-    $('#folderInput').addEventListener('change', async e => {
-      try {
-        state.data = await loadFromFileList(e.target.files);
-        state.sourceMode = 'filelist';
-        state.lastLoadedAt = new Date().toLocaleTimeString();
-        state.activeSessionId = state.data.sessions[0]?.id || null;
-        state.activeEventId = null;
-        hydrateFilters();
+      } else {
         render();
-      } catch (err) {
-        console.error(err);
-        alert('目录文件读取失败：' + err.message);
       }
-    });
+    };
+  });
+}
 
-    $('#reloadBtn').addEventListener('click', async () => {
-      if (state.sourceMode === 'handle' && directoryHandle) await reloadData();
-    });
+function renderMeta() {
+  const s=currentSession();
+  if (!s) { metaPanel.innerHTML='<div class="empty">无 session</div>'; return; }
+  const stats=s.runtime==='OpenCode'?s.opencode_stats:null;
+  const sessionModels=s.raw?.models?.length?s.raw.models:(s.raw?.model?[s.raw.model]:[]);
+  metaPanel.innerHTML=`
+    <div class="meta-grid">
+      <div class="k">Runtime</div><div class="v"><span class="runtime-badge ${runtimeClass(s.runtime)}">${escapeHtml(s.runtime||'—')}</span></div>
+      <div class="k">Platform</div><div class="v">${escapeHtml(s.project||'—')}</div>
+      <div class="k">Session</div><div class="v mono">${escapeHtml(s.id||'—')}</div>
+      <div class="k">Started</div><div class="v mono">${escapeHtml(s.started_at||'—')}</div>
+      <div class="k">Last evt</div><div class="v mono">${escapeHtml(s.last_event_at||'—')}</div>
+      <div class="k">Events</div><div class="v">${s.events?.length||0}</div>
+      <div class="k">Messages</div><div class="v">${s.raw?.message_count||s.raw?.messages?.length||0}</div>
+      <div class="k">Model</div><div class="v">${escapeHtml(formatList(sessionModels))}</div>
+      ${stats?`
+      <div class="k">LLM Req</div><div class="v">${escapeHtml(formatCount(stats.llmRequests))}</div>
+      <div class="k">Tools</div><div class="v">${escapeHtml(formatCount(stats.toolCalls))}</div>
+      <div class="k">Errors</div><div class="v ${stats.totalErrors>0?'err':''}">${escapeHtml(formatCount(stats.totalErrors))}</div>
+      <div class="k">Wall Time</div><div class="v mono">${escapeHtml(formatDurationCompact(stats.wallMs))}</div>
+      <div class="k">LLM Time</div><div class="v mono">${escapeHtml(formatDurationCompact(stats.llmDurationMs))}</div>
+      <div class="k">Tokens</div><div class="v">${escapeHtml(formatCount(stats.totalTokens))}</div>
+      <div class="k">Avg TTFT</div><div class="v mono">${stats.avgTtftMs!=null?escapeHtml(formatDurationCompact(stats.avgTtftMs)):'—'}</div>
+      `:''}
+      ${s.is_subagent&&s.parent_session_id?`
+      <div class="k">Parent</div><div class="v"><span class="parent-badge" style="cursor:pointer" data-goto-session="${escapeHtml(s.parent_session_id)}">↑ 跳转父 Session</span></div>
+      `:''}
+      ${(s.subagent_ids||[]).length?`
+      <div class="k">Sub-agents</div><div class="v">${(s.subagent_ids||[]).map(sid=>{
+        const sub=state.data.sessions.find(x=>x.id===sid);
+        return sub?`<span class="subagent-badge" style="cursor:pointer;display:inline-block;margin-bottom:3px" data-goto-session="${escapeHtml(sid)}">${escapeHtml(truncate(guessDisplayName(sub),30))}</span>`:'';
+      }).join(' ')}</div>
+      `:''}
+    </div>`;
+}
 
-    detailPanel.addEventListener('click', async (event) => {
-      const btn = event.target.closest('[data-copy-text]');
-      if (!btn) return;
-      try {
-        await copyText(btn.dataset.copyText || '');
-        btn.dataset.copied = 'true';
-        btn.textContent = 'Copied';
-        window.setTimeout(() => {
-          btn.dataset.copied = 'false';
-          btn.textContent = 'Copy';
-        }, 1200);
-      } catch (err) {
-        console.error(err);
-        btn.textContent = 'Copy failed';
-        window.setTimeout(() => {
-          btn.dataset.copied = 'false';
-          btn.textContent = 'Copy';
-        }, 1200);
-      }
-    });
-
-    (async function init() {
+function renderAgents() {
+  const s=currentSession();
+  if (!s) { agentsPanel.innerHTML='<div class="empty">无 role</div>'; return; }
+  const agents=Array.from(new Set((s.agents||[]).concat((s.events||[]).map(e=>e.agent).filter(Boolean))));
+  agentsPanel.innerHTML=`<div class="agents">${agents.map(a=>`<div class="agent-chip ${state.activeAgent===a?'active':''}" data-agent="${escapeHtml(a)}">${escapeHtml(a)}</div>`).join('')}</div>`;
+  [...agentsPanel.querySelectorAll('.agent-chip')].forEach(el=>{
+    el.onclick=()=>{
+      state.activeAgent=state.activeAgent===el.dataset.agent?'':el.dataset.agent;
+      agentFilter.value=state.activeAgent;
+      state.activeEventId=null;
       render();
-      await restoreDirectoryHandle();
-    })();
-  </script>
+    };
+  });
+}
+
+function getEventSourceInfo(session, event) {
+  if (session?.runtime!=='OpenCode') return null;
+  if (isOpenCodeDeepEvent(event)) return {label:'deep',className:'src-deep'};
+  if (isOpenCodeLlmEvent(event))  return {label:'llm', className:'src-llm'};
+  if (session?.index_meta?.source_path==='happytrace-export+llm-logs') return {label:'mixed',className:'src-mixed'};
+  return null;
+}
+
+function renderEvents() {
+  const s=currentSession(), events=visibleEvents(s);
+  eventCount.textContent=events.length;
+  if (!events.length) {
+    eventsPanel.innerHTML='<div class="empty">当前筛选下没有事件</div>';
+    detailPanel.innerHTML='<div class="empty">选一条事件查看详情</div>';
+    detailTitle.textContent='—';
+    return;
+  }
+  if (!events.some(e=>String(e.id)===String(state.activeEventId))) state.activeEventId=events[0].id;
+  eventsPanel.innerHTML=`<div class="event-list">${events.map(e=>{
+    const source=getEventSourceInfo(s,e);
+    const toolText=e.tool?`<span class="good">${escapeHtml(e.tool)}</span>`:e.status==='error'?'<span class="err">error</span>':'-';
+    return `
+    <div class="event-row ${String(e.id)===String(state.activeEventId)?'active':''}" data-event-id="${e.id}">
+      <div class="event-num">#${e.id}</div>
+      <div class="event-time">${escapeHtml(e.time||'')}</div>
+      <div class="event-agent">${escapeHtml(e.agent||'-')}</div>
+      <div><span class="badge t-${escapeHtml(e.type||'Unknown')}">${escapeHtml(e.type||'-')}</span>${source?`<span class="source-badge ${source.className}">${source.label}</span>`:''}</div>
+      <div class="event-tool">${toolText}</div>
+      <div class="event-summary">${escapeHtml(e.summary||'')}</div>
+    </div>`;
+  }).join('')}</div>`;
+  [...eventsPanel.querySelectorAll('.event-row')].forEach(el=>{
+    el.onclick=()=>{
+      state.activeEventId=el.dataset.eventId;
+      renderDetail(); renderStatus();
+      [...eventsPanel.querySelectorAll('.event-row')].forEach(x=>x.classList.remove('active'));
+      el.classList.add('active');
+    };
+  });
+  renderDetail();
+}
+
+function renderOpenCodeToolExtras(e) {
+  const toolState=e.payload?.tool_state; if (!toolState) return '';
+  const dur=e.payload?.duration_ms, metadata=toolState.metadata?JSON.stringify(toolState.metadata,null,2):'';
+  return `
+    <div class="section">
+      <div class="section-head"><div class="section-title">OpenCode Tool</div></div>
+      <div class="detail-grid">
+        <div class="k">Status</div><div class="v ${toolState.status==='error'?'err':'good'}">${escapeHtml(toolState.status||'—')}</div>
+        <div class="k">Title</div><div class="v">${escapeHtml(toolState.title||'—')}</div>
+        <div class="k">Duration</div><div class="v mono">${dur!=null?escapeHtml(String(dur)+' ms'):'—'}</div>
+        <div class="k">Started</div><div class="v mono">${toolState.time?.start?escapeHtml(toIsoFromMs(toolState.time.start)):'—'}</div>
+        <div class="k">Ended</div><div class="v mono">${toolState.time?.end?escapeHtml(toIsoFromMs(toolState.time.end)):'—'}</div>
+      </div>
+      ${metadata?`<pre>${escapeHtml(metadata)}</pre>`:''}
+    </div>`;
+}
+
+function renderDetail() {
+  const s=currentSession();
+  const e=(s?.events||[]).find(x=>String(x.id)===String(state.activeEventId));
+  if (!e) { detailPanel.innerHTML='<div class="empty">选一条事件查看详情</div>'; detailTitle.textContent='—'; return; }
+  const source=getEventSourceInfo(s,e);
+  const isOpenCodeTool=s?.runtime==='OpenCode'&&(e.type==='ToolCall'||e.type==='ToolResult')&&e.payload?.tool_state;
+  detailTitle.textContent=`${e.type||'Event'} #${e.id}`;
+  detailPanel.innerHTML=`
+    <div class="detail-grid">
+      <div class="k">Agent</div><div class="v">${escapeHtml(e.agent||'—')}</div>
+      <div class="k">Type</div><div class="v"><span class="badge t-${escapeHtml(e.type||'Unknown')}">${escapeHtml(e.type||'—')}</span></div>
+      <div class="k">Tool</div><div class="v mono">${escapeHtml(e.tool||'—')}</div>
+      <div class="k">Time</div><div class="v mono">${escapeHtml(e.time||'—')}</div>
+      ${source?`<div class="k">Source</div><div class="v"><span class="source-badge ${source.className}">${source.label}</span></div>`:''}
+      <div class="k">Status</div><div class="v ${e.status==='error'?'err':'good'}">${escapeHtml(e.status||'—')}</div>
+      <div class="k">Summary</div><div class="v">${escapeHtml(e.summary||'—')}</div>
+    </div>
+    ${isOpenCodeTool?renderOpenCodeToolExtras(e):''}
+    ${e.content?`<div class="section"><div class="section-head"><div class="section-title">Content / Input</div></div><pre>${escapeHtml(e.content)}</pre></div>`:''}
+    ${e.output?`<div class="section"><div class="section-head"><div class="section-title">Output / Reasoning</div></div><pre>${escapeHtml(e.output)}</pre></div>`:''}
+    ${e.payload?`<div class="section"><div class="section-head"><div class="section-title">Payload</div><button class="copy-btn" type="button" data-copy-text="${escapeHtml(JSON.stringify(e.payload,null,2))}">Copy</button></div><pre>${escapeHtml(JSON.stringify(e.payload,null,2))}</pre></div>`:''}`;
+}
+
+function hydrateFilters() {
+  const s=currentSession();
+  const types=Array.from(new Set((s?.events||[]).map(e=>e.type).filter(Boolean)));
+  const agents=Array.from(new Set((s?.events||[]).map(e=>e.agent).filter(Boolean)));
+  typeFilter.innerHTML='<option value="">全部类型</option>'+types.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  agentFilter.innerHTML='<option value="">全部 role</option>'+agents.map(a=>`<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+  typeFilter.value=state.activeType; agentFilter.value=state.activeAgent;
+}
+
+function renderStatus() {
+  const s=currentSession(), events=visibleEvents(s);
+  const selected=events.find(e=>String(e.id)===String(state.activeEventId));
+  const isLive=state.sourceMode==='handle';
+  statusBar.innerHTML=`
+    <span><span class="status-dot${isLive?' live':''}"></span>${escapeHtml(state.sourceMode)}</span>
+    <span>sessions: ${state.data.sessions.length}</span>
+    <span>events: ${events.length}/${s?.events?.length||0}</span>
+    <span>role: ${escapeHtml(state.activeAgent||'all')}</span>
+    <span>type: ${escapeHtml(state.activeType||'all')}</span>
+    ${selected?`<span>selected: #${selected.id}</span>`:''}
+    <span>loaded: ${escapeHtml(state.lastLoadedAt||'—')}</span>
+    ${isLive?'<span class="good">auto-refresh on</span>':''}`;
+}
+
+function render() {
+  renderSessions();
+  renderMeta();
+  renderAgents();
+  renderEvents();
+  renderStatus();
+  if (state.activeView === 'analytics') renderAnalytics();
+  if (state.activeEventsTab === 'stats') renderSessionStats();
+}
+
+/* ═══════════════════════════════════════
+   Data loading actions
+   ═══════════════════════════════════════ */
+
+async function connectDirectory() {
+  if (!window.showDirectoryPicker) { alert('当前浏览器不支持目录连接。可改用「选择文件夹」，或用 Chrome/Arc 打开。'); return; }
+  const handle=await window.showDirectoryPicker({mode:'read'});
+  directoryHandle=handle;
+  await idbSet('sessionsDirHandle',handle);
+  state.sourceMode='handle';
+  await reloadData();
+  startAutoRefresh();
+}
+
+async function restoreDirectoryHandle() {
+  if (!window.showDirectoryPicker) return false;
+  try {
+    const handle=await idbGet('sessionsDirHandle');
+    if (!handle) return false;
+    const perm=await handle.queryPermission({mode:'read'});
+    if (perm==='granted') {
+      directoryHandle=handle; state.sourceMode='handle';
+      await reloadData(); startAutoRefresh(); return true;
+    }
+  } catch {}
+  return false;
+}
+
+async function connectOpenCodeDb() {
+  if (window.showOpenFilePicker) {
+    const [handle]=await window.showOpenFilePicker({multiple:false,types:[{description:'OpenCode SQLite DB',accept:{'application/octet-stream':['.db','.sqlite','.sqlite3']}}]});
+    if (!handle) return;
+    const file=await handle.getFile();
+    state.data=await loadFromOpenCodeDbFile(file);
+    state.sourceMode='opencode-db'; state.lastLoadedAt=new Date().toLocaleTimeString();
+    state.activeSessionId=state.data.sessions[0]?.id||null; state.activeEventId=null;
+    hydrateFilters(); render(); return;
+  }
+  $('#opencodeDbInput').click();
+}
+
+async function reloadData() {
+  try {
+    if (state.sourceMode==='handle'&&directoryHandle) state.data=await loadFromDirectoryHandle(directoryHandle);
+    state.lastLoadedAt=new Date().toLocaleTimeString();
+    if (!state.activeSessionId||!state.data.sessions.some(s=>s.id===state.activeSessionId)) {
+      state.activeSessionId=state.data.sessions[0]?.id||null; state.activeEventId=null;
+    }
+    hydrateFilters(); render();
+  } catch(err) { console.error(err); alert('加载失败：'+err.message); }
+}
+
+function startAutoRefresh() {
+  clearInterval(autoRefreshTimer);
+  if (state.sourceMode==='handle'&&directoryHandle) {
+    autoRefreshTimer=setInterval(()=>reloadData(),AUTO_REFRESH_MS);
+  }
+}
+
+/* ═══════════════════════════════════════
+   Event listeners
+   ═══════════════════════════════════════ */
+
+$('#searchInput').addEventListener('input',e=>{ state.search=e.target.value.trim(); state.activeEventId=null; render(); });
+typeFilter.addEventListener('change',e=>{ state.activeType=e.target.value; state.activeEventId=null; render(); });
+agentFilter.addEventListener('change',e=>{ state.activeAgent=e.target.value; state.activeEventId=null; render(); });
+
+$('#connectBtn').addEventListener('click',async()=>{ try { await connectDirectory(); } catch(err){console.error(err);} });
+$('#openCodeDbBtn').addEventListener('click',async()=>{ try { await connectOpenCodeDb(); } catch(err){console.error(err);alert('DB 载入失败：'+err.message);} });
+$('#folderBtn').addEventListener('click',()=>$('#folderInput').click());
+$('#reloadBtn').addEventListener('click',async()=>{ if(state.sourceMode==='handle'&&directoryHandle) await reloadData(); });
+
+$('#opencodeDbInput').addEventListener('change',async e=>{
+  try {
+    const file=e.target.files?.[0]; if (!file) return;
+    state.data=await loadFromOpenCodeDbFile(file);
+    state.sourceMode='opencode-db'; state.lastLoadedAt=new Date().toLocaleTimeString();
+    state.activeSessionId=state.data.sessions[0]?.id||null; state.activeEventId=null;
+    hydrateFilters(); render();
+  } catch(err){console.error(err);alert('DB 文件读取失败：'+err.message);}
+  finally{e.target.value='';}
+});
+
+$('#folderInput').addEventListener('change',async e=>{
+  try {
+    state.data=await loadFromFileList(e.target.files);
+    state.sourceMode='filelist'; state.lastLoadedAt=new Date().toLocaleTimeString();
+    state.activeSessionId=state.data.sessions[0]?.id||null; state.activeEventId=null;
+    hydrateFilters(); render();
+  } catch(err){console.error(err);alert('目录文件读取失败：'+err.message);}
+});
+
+metaPanel.addEventListener('click', e => {
+  const el = e.target.closest('[data-goto-session]');
+  if (!el) return;
+  state.activeSessionId = el.dataset.gotoSession;
+  state.activeEventId = null;
+  hydrateFilters();
+  render();
+});
+
+detailPanel.addEventListener('click',async event=>{
+  const btn=event.target.closest('[data-copy-text]'); if (!btn) return;
+  try {
+    await copyText(btn.dataset.copyText||'');
+    btn.dataset.copied='true'; btn.textContent='Copied';
+    window.setTimeout(()=>{ btn.dataset.copied='false'; btn.textContent='Copy'; },1200);
+  } catch(err) { console.error(err); btn.textContent='Copy failed'; window.setTimeout(()=>{ btn.dataset.copied='false'; btn.textContent='Copy'; },1200); }
+});
+
+/* ── Keyboard shortcut ── */
+document.addEventListener('keydown',e=>{
+  if ((e.metaKey||e.ctrlKey)&&e.key==='k') { e.preventDefault(); $('#searchInput').focus(); }
+});
+
+/* ── Init ── */
+(async function init() {
+  render();
+  await restoreDirectoryHandle();
+})();
+</script>
 </body>
 </html>
